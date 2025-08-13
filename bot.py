@@ -50,17 +50,28 @@ reload_thread.start()
 
 @bot.message_handler(commands=["start"])
 def handle_start(message):
+    # Создаем клавиатуру для меню
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.row(types.KeyboardButton("🗂 Категории"), types.KeyboardButton("📋 Каталог"))
+    markup.row(types.KeyboardButton("🛍 Корзина"), types.KeyboardButton("🔄 Обновить"))
+    
     text = (
         "🛒 Добро пожаловать в наш интернет-магазин!\n\n"
-        "Доступные команды:\n"
-        "🗂 /categories – посмотреть категории товаров\n"
-        "📋 /catalog – весь каталог\n"
-        "🛍 /cart – просмотреть корзину\n"
-        "🔄 /reload – обновить каталог (для администрации)"
+        "Используйте кнопки ниже для навигации:"
     )
-    bot.send_message(message.chat.id, text)
+    bot.send_message(message.chat.id, text, reply_markup=markup)
+    
+    # Устанавливаем командные кнопки в интерфейсе
+    bot.set_my_commands([
+        types.BotCommand("start", "Главное меню"),
+        types.BotCommand("categories", "Показать категории"),
+        types.BotCommand("catalog", "Показать весь каталог"),
+        types.BotCommand("cart", "Показать корзину"),
+        types.BotCommand("reload", "Обновить каталог")
+    ])
 
 
+@bot.message_handler(func=lambda message: message.text == "🗂 Категории")
 @bot.message_handler(commands=["categories"])
 def handle_categories(message):
     categories = loader.get_categories()
@@ -103,15 +114,21 @@ def handle_category_selection(call):
 
         # Пытаемся отредактировать сообщение, если не получается - отправляем новое
         try:
-            bot.edit_message_text(
-                text=f"📂 Категория: {category}",
-                chat_id=call.message.chat.id,
-                message_id=call.message.message_id,
-                reply_markup=markup
-            )
+            if hasattr(call.message, 'text'):
+                bot.edit_message_text(
+                    text=f"📂 Категория: {category}",
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
+                    reply_markup=markup
+                )
+            else:
+                bot.send_message(
+                    chat_id=call.message.chat.id,
+                    text=f"📂 Категория: {category}",
+                    reply_markup=markup
+                )
         except telebot.apihelper.ApiTelegramException as e:
             if "there is no text in the message to edit" in str(e):
-                # Сообщение содержит медиа-контент, отправляем новое сообщение
                 bot.send_message(
                     chat_id=call.message.chat.id,
                     text=f"📂 Категория: {category}",
@@ -137,22 +154,26 @@ def handle_back_to_categories(call):
             ))
 
         try:
-            bot.edit_message_text(
-                text="🗂 Выберите категорию:",
-                chat_id=call.message.chat.id,
-                message_id=call.message.message_id,
-                reply_markup=markup
-            )
-        except telebot.apihelper.ApiTelegramException as e:
-            if "there is no text in the message to edit" in str(e):
+            if hasattr(call.message, 'text'):
+                bot.edit_message_text(
+                    text="🗂 Выберите категорию:",
+                    chat_id=call.message.chat.id,
+                    message_id=call.message.message_id,
+                    reply_markup=markup
+                )
+            else:
                 bot.send_message(
                     chat_id=call.message.chat.id,
                     text="🗂 Выберите категорию:",
                     reply_markup=markup
                 )
-            else:
-                raise e
-
+        except Exception as e:
+            logging.error(f"Ошибка редактирования сообщения: {e}")
+            bot.send_message(
+                chat_id=call.message.chat.id,
+                text="🗂 Выберите категорию:",
+                reply_markup=markup
+            )
     except Exception as e:
         logging.error(f"Ошибка в handle_back_to_categories: {e}")
         bot.answer_callback_query(call.id, "Произошла ошибка. Попробуйте еще раз.")
@@ -212,6 +233,7 @@ def handle_item_details(call):
         bot.answer_callback_query(call.id, "Произошла ошибка. Попробуйте еще раз.")
 
 
+@bot.message_handler(func=lambda message: message.text == "📋 Каталог")
 @bot.message_handler(commands=["catalog"])
 def handle_catalog(message):
     items = loader.data
@@ -229,11 +251,17 @@ def handle_catalog(message):
     bot.send_message(message.chat.id, "📋 Весь каталог:", reply_markup=markup)
 
 
-@bot.callback_query_handler(func=lambda c: c.data and c.data.startswith("add_"))
+@bot.callback_query_handler(func=lambda c: c.data and c.data.startswith("add_") and not c.data.startswith("add_cart_"))
 def handle_add_to_cart(call):
     try:
         chat_id = call.message.chat.id
-        item_id = int(call.data.split("_")[1])
+        # call.data может быть вида "add_123", но также есть "add_cart_123"
+        # Мы уже исключили "add_cart_" в фильтре, поэтому тут безопасно split("_")[1]
+        item_id_str = call.data.split("_")[1]
+        # Проверяем, что item_id действительно число
+        if not item_id_str.isdigit():
+            return bot.answer_callback_query(call.id, "Некорректный идентификатор товара.")
+        item_id = int(item_id_str)
         info = loader.data.get(item_id)
 
         if not info:
@@ -256,6 +284,7 @@ def handle_add_to_cart(call):
         bot.answer_callback_query(call.id, "Произошла ошибка. Попробуйте еще раз.")
 
 
+@bot.message_handler(func=lambda message: message.text == "🛍 Корзина")
 @bot.message_handler(commands=["cart"])
 def handle_view_cart(message):
     chat_id = message.chat.id
@@ -323,9 +352,7 @@ def handle_add_from_cart(call):
             return bot.answer_callback_query(call.id, "Нельзя добавить больше доступного количества.")
 
         cart[item_id] = current_in_cart + 1
-        bot.answer_callback_query(call.id, f"➕ Добавлено")
-
-        # Обновляем сообщение с корзиной
+        bot.answer_callback_query(call.id, "➕ Добавлено")
         handle_view_cart_update(call.message)
 
     except Exception as e:
@@ -348,8 +375,6 @@ def handle_remove_from_cart(call):
             del cart[item_id]
 
         bot.answer_callback_query(call.id, "➖ Товар удален")
-
-        # Обновляем сообщение с корзиной
         handle_view_cart_update(call.message)
 
     except Exception as e:
@@ -414,7 +439,6 @@ def handle_view_cart_update(message):
             )
         except telebot.apihelper.ApiTelegramException as e:
             if "there is no text in the message to edit" in str(e) or "message is not modified" in str(e):
-                # Сообщение не может быть отредактировано, отправляем новое
                 bot.send_message(chat_id, text, reply_markup=markup)
             else:
                 logging.error(f"Ошибка редактирования сообщения корзины: {e}")
@@ -598,6 +622,7 @@ def finalize_order(chat_id):
         bot.send_message(chat_id, "Произошла ошибка при оформлении заказа. Попробуйте еще раз.")
 
 
+@bot.message_handler(func=lambda message: message.text == "🔄 Обновить")
 @bot.message_handler(commands=["reload"])
 def handle_reload_catalog(message):
     try:
