@@ -32,7 +32,17 @@ class CatalogLoader:
 
             # Ожидается, что Excel-файл содержит колонки:
             # id, name, category, price, stock, image_url
-            df = pd.read_excel(self.path, engine='openpyxl')
+            try:
+                df = pd.read_excel(self.path, engine='openpyxl')
+            except Exception as e:
+                logging.error(f"Ошибка чтения Excel файла: {e}")
+                raise
+
+            # Проверяем наличие данных
+            if df.empty:
+                logging.warning(f"Excel файл {self.path} пустой")
+                self.data = {}
+                return
 
             # Проверяем наличие обязательных колонок
             required_columns = ['id', 'name', 'category', 'price', 'stock']
@@ -49,10 +59,24 @@ class CatalogLoader:
                 'image_url': ''
             })
 
-            # Проверяем типы данных
-            df['id'] = df['id'].astype(int)
-            df['price'] = pd.to_numeric(df['price'], errors='coerce').fillna(0)
-            df['stock'] = pd.to_numeric(df['stock'], errors='coerce').fillna(0).astype(int)
+            # Проверяем типы данных и очищаем от некорректных строк
+            try:
+                df['id'] = pd.to_numeric(df['id'], errors='coerce')
+                df = df.dropna(subset=['id'])  # Удаляем строки с некорректным ID
+                df['id'] = df['id'].astype(int)
+                
+                df['price'] = pd.to_numeric(df['price'], errors='coerce').fillna(0)
+                df['stock'] = pd.to_numeric(df['stock'], errors='coerce').fillna(0).astype(int)
+                
+                # Убираем дубликаты по ID
+                df = df.drop_duplicates(subset=['id'], keep='first')
+                
+                # Фильтруем только положительные ID
+                df = df[df['id'] > 0]
+                
+            except Exception as e:
+                logging.error(f"Ошибка обработки данных: {e}")
+                raise
 
             # Переводим в словарь вида {id: {name:…, category:…, …}}
             self.data = df.set_index('id').to_dict('index')
@@ -68,7 +92,11 @@ class CatalogLoader:
     def reload(self):
         """Перечитывает Excel при изменении файла"""
         with self.lock:
-            self._load()
+            try:
+                self._load()
+            except Exception as e:
+                logging.error(f"Ошибка при перезагрузке каталога: {e}")
+                # Не поднимаем исключение, чтобы не остановить автоматическое обновление
 
     def get_categories(self) -> list:
         """Возвращает список уникальных категорий"""
@@ -110,6 +138,7 @@ class CatalogLoader:
                 return False
 
             # Уменьшаем запас в памяти
+            original_stock = current_stock
             self.data[item_id]['stock'] = current_stock - qty
 
             # Сохраняем изменения в Excel файл
@@ -119,7 +148,7 @@ class CatalogLoader:
                 return True
             except Exception as e:
                 # Откатываем изменения в памяти
-                self.data[item_id]['stock'] = current_stock
+                self.data[item_id]['stock'] = original_stock
                 logging.error(f"Ошибка сохранения изменений в Excel: {e}")
                 return False
 
@@ -142,12 +171,39 @@ class CatalogLoader:
 
             df = df[columns_order]
 
+            # Создаем резервную копию перед сохранением
+            backup_path = f"{self.path}.backup"
+            if os.path.exists(self.path):
+                try:
+                    import shutil
+                    shutil.copy2(self.path, backup_path)
+                except Exception as e:
+                    logging.warning(f"Не удалось создать резервную копию: {e}")
+
             # Сохраняем в Excel
             df.to_excel(self.path, index=False, engine='openpyxl')
             self.last_modified = os.path.getmtime(self.path)
+            
+            # Удаляем старую резервную копию если сохранение прошло успешно
+            if os.path.exists(backup_path):
+                try:
+                    os.remove(backup_path)
+                except:
+                    pass
 
         except Exception as e:
             logging.error(f"Ошибка сохранения в Excel: {e}")
+            
+            # Пытаемся восстановить из резервной копии
+            backup_path = f"{self.path}.backup"
+            if os.path.exists(backup_path):
+                try:
+                    import shutil
+                    shutil.copy2(backup_path, self.path)
+                    logging.info("Восстановлен файл из резервной копии")
+                except Exception as restore_error:
+                    logging.error(f"Ошибка восстановления из резервной копии: {restore_error}")
+            
             raise
 
     def get_stats(self) -> dict:
@@ -158,7 +214,8 @@ class CatalogLoader:
                 'total_categories': 0,
                 'items_in_stock': 0,
                 'items_out_of_stock': 0,
-                'total_value': 0
+                'total_value': 0,
+                'last_updated': 'Никогда'
             }
 
         items_in_stock = sum(1 for item in self.data.values() if item.get('stock', 0) > 0)
@@ -222,3 +279,83 @@ class CatalogLoader:
                 errors.append(f"Некорректный остаток для товара ID {item_id}: {stock}")
 
         return errors
+
+    def add_item(self, name: str, category: str, price: float, stock: int, image_url: str = '') -> int:
+        """Добавляет новый товар в каталог"""
+        with self.lock:
+            # Находим максимальный ID + 1
+            max_id = max(self.data.keys()) if self.data else 0
+            new_id = max_id + 1
+            
+            # Добавляем товар
+            self.data[new_id] = {
+                'name': name,
+                'category': category,
+                'price': float(price),
+                'stock': int(stock),
+                'image_url': image_url
+            }
+            
+            try:
+                self._save_to_excel()
+                logging.info(f"Добавлен новый товар с ID {new_id}: {name}")
+                return new_id
+            except Exception as e:
+                # Откатываем изменения
+                del self.data[new_id]
+                logging.error(f"Ошибка добавления товара: {e}")
+                raise
+
+    def update_item(self, item_id: int, **kwargs) -> bool:
+        """Обновляет информацию о товаре"""
+        with self.lock:
+            if item_id not in self.data:
+                logging.warning(f"Товар с ID {item_id} не найден")
+                return False
+            
+            # Сохраняем оригинальные данные для отката
+            original_data = self.data[item_id].copy()
+            
+            # Обновляем данные
+            allowed_fields = ['name', 'category', 'price', 'stock', 'image_url']
+            for field, value in kwargs.items():
+                if field in allowed_fields:
+                    if field in ['price']:
+                        self.data[item_id][field] = float(value)
+                    elif field in ['stock']:
+                        self.data[item_id][field] = int(value)
+                    else:
+                        self.data[item_id][field] = str(value)
+            
+            try:
+                self._save_to_excel()
+                logging.info(f"Обновлен товар ID {item_id}")
+                return True
+            except Exception as e:
+                # Откатываем изменения
+                self.data[item_id] = original_data
+                logging.error(f"Ошибка обновления товара: {e}")
+                return False
+
+    def delete_item(self, item_id: int) -> bool:
+        """Удаляет товар из каталога"""
+        with self.lock:
+            if item_id not in self.data:
+                logging.warning(f"Товар с ID {item_id} не найден")
+                return False
+            
+            # Сохраняем данные для отката
+            deleted_item = self.data[item_id].copy()
+            
+            # Удаляем товар
+            del self.data[item_id]
+            
+            try:
+                self._save_to_excel()
+                logging.info(f"Удален товар ID {item_id}: {deleted_item.get('name', 'Без названия')}")
+                return True
+            except Exception as e:
+                # Откатываем изменения
+                self.data[item_id] = deleted_item
+                logging.error(f"Ошибка удаления товара: {e}")
+                return False
