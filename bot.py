@@ -9,8 +9,8 @@ import config
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 
-bot = telebot.TeleBot(config.BOT_TOKEN)
-loader = CatalogLoader(path=config.EXCEL_PATH)
+bot = telebot.TeleBot(BOT_TOKEN)
+loader = CatalogLoader(path=EXCEL_PATH)
 
 # Хранение корзин: {chat_id: {item_id: quantity}}
 user_carts = {}
