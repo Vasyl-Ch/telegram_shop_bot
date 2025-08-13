@@ -3,14 +3,24 @@ import telebot
 from telebot import types
 import threading
 import time
+import os
+from dotenv import load_dotenv
 
 from data_loader import CatalogLoader
-import config
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 
-bot = telebot.TeleBot(config.BOT_TOKEN)
-loader = CatalogLoader(path=config.EXCEL_PATH)
+# Загружаем переменные окружения из файла .env
+load_dotenv()
+
+# Получаем данные из переменных окружения
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+EXCEL_PATH = os.getenv("EXCEL_PATH")
+SELLER_CHAT_ID = os.getenv("SELLER_CHAT_ID")
+
+# Создаем бота и загрузчик каталога
+bot = telebot.TeleBot(BOT_TOKEN)
+loader = CatalogLoader(EXCEL_PATH)
 
 # Хранение корзин: {chat_id: {item_id: quantity}}
 user_carts = {}
@@ -472,7 +482,7 @@ def finalize_order(chat_id):
     bot.send_message(chat_id, user_message)
 
     # Отправляем уведомление продавцу
-    if successful_items and hasattr(config, 'SELLER_CHAT_ID'):
+    if successful_items and SELLER_CHAT_ID:
         user_info = bot.get_chat(chat_id)
         customer_name = f"{user_info.first_name} {user_info.last_name or ''}".strip()
         if not customer_name:
@@ -492,7 +502,7 @@ def finalize_order(chat_id):
         seller_message += f"\n💰 Общая сумма: {total_cost}₽"
 
         try:
-            bot.send_message(config.SELLER_CHAT_ID, seller_message)
+            bot.send_message(SELLER_CHAT_ID, seller_message)
         except Exception as e:
             logging.error(f"Ошибка отправки уведомления продавцу: {e}")
 
