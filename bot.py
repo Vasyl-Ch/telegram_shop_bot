@@ -26,7 +26,9 @@ loader = CatalogLoader(EXCEL_PATH)
 user_carts = {}
 # Хранение информации о заказах: {chat_id: {'cart': {}, 'phone': '', 'address': ''}}
 user_orders = {}
-
+# Хранение заказов: {order_id: {'chat_id': chat_id, 'items': [], 'total': 0, 'phone': '', 'address': '', 'status': 'pending'/'confirmed'/'delivered'/'cancelled'}}
+all_orders = {}
+order_counter = 1
 
 def get_cart(chat_id):
     return user_carts.setdefault(chat_id, {})
@@ -47,6 +49,11 @@ def auto_reload_catalog():
 reload_thread = threading.Thread(target=auto_reload_catalog, daemon=True)
 reload_thread.start()
 
+# Обработчик для всех сообщений с фото
+@bot.message_handler(content_types=['photo'])
+def handle_photos(message):
+    bot.reply_to(message, "❌ Извините, но отправка изображений не поддерживается."
+                          " Пожалуйста, используйте текстовые команды.")
 
 @bot.message_handler(commands=["start"])
 def handle_start(message):
@@ -54,13 +61,13 @@ def handle_start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.row(types.KeyboardButton("🗂 Категории"), types.KeyboardButton("📋 Каталог"))
     markup.row(types.KeyboardButton("🛍 Корзина"), types.KeyboardButton("🔄 Обновить"))
-    
+
     text = (
         "🛒 Добро пожаловать в наш интернет-магазин!\n\n"
         "Используйте кнопки ниже для навигации:"
     )
     bot.send_message(message.chat.id, text, reply_markup=markup)
-    
+
     # Устанавливаем командные кнопки в интерфейсе
     bot.set_my_commands([
         types.BotCommand("start", "Главное меню"),
@@ -542,58 +549,94 @@ def get_delivery_address(message):
 
 def finalize_order(chat_id):
     try:
+        global order_counter
+
         order = user_orders.get(chat_id)
         if not order:
-            return
+            logging.error(f"Заказ не найден для chat_id: {chat_id}")
+            return bot.send_message(chat_id,
+                                    "❌ Ошибка: информация о заказе не найдена. Пожалуйста, начните оформление заново.")
 
         cart = order['cart']
         phone = order['phone']
         address = order['address']
 
-        # Проверка наличия и финализация заказа
+        if not cart:
+            logging.error(f"Пустая корзина для chat_id: {chat_id}")
+            return bot.send_message(chat_id, "❌ Ошибка: корзина пуста. Пожалуйста, добавьте товары и попробуйте снова.")
+
+        # Проверка наличия товаров
         summary = []
         total_cost = 0
-        successful_items = []
+        order_items = []
+        errors = []
 
-        for item_id, qty in list(cart.items()):
+        for item_id, qty in cart.items():
             info = loader.data.get(item_id)
             if not info:
-                summary.append(f"❌ {item_id} — товар не найден")
+                errors.append(f"❌ Товар ID {item_id} не найден в каталоге")
                 continue
 
             if info["stock"] < qty:
-                summary.append(f"❌ {info['name']} (заказано: {qty}, доступно: {info['stock']})")
+                errors.append(f"❌ {info['name']} (заказано: {qty}, доступно: {info['stock']})")
                 continue
 
-            # Успешный товар
             cost = info['price'] * qty
             total_cost += cost
-            loader.reduce_stock(item_id, qty)
-            summary.append(f"✅ {info['name']} ×{qty} — {cost}₽")
-            successful_items.append({
+            order_items.append({
+                'id': item_id,
                 'name': info['name'],
                 'quantity': qty,
                 'price': info['price'],
-                'cost': cost
+                'cost': cost,
+                'stock': info['stock']
             })
+            summary.append(f"✅ {info['name']} ×{qty} — {cost}₽")
+
+        if not order_items:
+            message_parts = ["❌ Не удалось оформить ни один товар из заказа.\n\n"]
+            message_parts.append("Причины:\n")
+            message_parts.extend(errors)
+            message_parts.append("\n\nПожалуйста, попробуйте оформить заказ снова.")
+            return bot.send_message(chat_id, "".join(message_parts))
+
+        # Создаем заказ со статусом "pending"
+        order_id = order_counter
+        order_counter += 1
+
+        all_orders[order_id] = {
+            'chat_id': chat_id,
+            'items': order_items,
+            'total': total_cost,
+            'phone': phone,
+            'address': address,
+            'errors': errors,
+            'status': 'pending'
+        }
 
         # Очищаем корзину пользователя
         user_carts[chat_id] = {}
-        del user_orders[chat_id]
+        if chat_id in user_orders:
+            del user_orders[chat_id]
 
-        # Отправляем подтверждение пользователю
-        user_message = (
-                f"🎉 Заказ оформлен!\n\n"
-                f"📱 Телефон: {phone}\n"
-                f"🏠 Адрес: {address}\n\n"
-                f"📦 Товары:\n" + "\n".join(summary) +
-                f"\n\n💰 Итого: {total_cost}₽\n\n"
-                f"🚚 Ожидайте звонка для уточнения деталей доставки."
-        )
-        bot.send_message(chat_id, user_message)
+        # Сообщение пользователю
+        message_parts = []
+        message_parts.append(f"🔄 Ваш заказ #{order_id} отправлен на обработку!\n\n")
+        message_parts.append(f"📱 Телефон: {phone}\n")
+        message_parts.append(f"🏠 Адрес: {address}\n\n")
+        message_parts.append("📦 Товары:\n")
+        message_parts.extend(summary)
+        message_parts.append(f"\n\n💰 Итого: {total_cost}₽\n\n")
+        message_parts.append("⏳ Статус: В обработке")
+
+        if errors:
+            message_parts.append("\n\n⚠️ Некоторые товары не доступны:\n")
+            message_parts.extend(errors)
+
+        bot.send_message(chat_id, "".join(message_parts))
 
         # Отправляем уведомление продавцу
-        if successful_items and SELLER_CHAT_ID:
+        if SELLER_CHAT_ID:
             try:
                 user_info = bot.get_chat(chat_id)
                 customer_name = f"{user_info.first_name} {user_info.last_name or ''}".strip()
@@ -601,26 +644,222 @@ def finalize_order(chat_id):
                     customer_name = user_info.username or f"ID: {chat_id}"
 
                 seller_message = (
-                    f"🔔 НОВЫЙ ЗАКАЗ!\n\n"
+                    f"🔔 НОВЫЙ ЗАКАЗ #{order_id}!\n\n"
                     f"👤 Клиент: {customer_name}\n"
                     f"📱 Телефон: {phone}\n"
                     f"🏠 Адрес: {address}\n\n"
                     f"📦 Заказанные товары:\n"
                 )
 
-                for item in successful_items:
-                    seller_message += f"• {item['name']} ×{item['quantity']} — {item['cost']}₽\n"
+                for item in order_items:
+                    seller_message += f"• {item['name']} ×{item['quantity']} — {item['cost']}₽ (в наличии: {item['stock']})\n"
 
-                seller_message += f"\n💰 Общая сумма: {total_cost}₽"
+                if errors:
+                    seller_message += "\n⚠️ Проблемы с заказом:\n"
+                    seller_message += "\n".join(errors) + "\n"
 
-                bot.send_message(SELLER_CHAT_ID, seller_message)
+                seller_message += f"\n💰 Общая сумма: {total_cost}₽\n\n"
+                seller_message += "🔄 Статус: В обработке"
+
+                markup = types.InlineKeyboardMarkup()
+                markup.row(
+                    types.InlineKeyboardButton("✅ Подтвердить", callback_data=f"confirm_order_{order_id}"),
+                    types.InlineKeyboardButton("❌ Отменить", callback_data=f"cancel_order_{order_id}")
+                )
+
+                msg = bot.send_message(SELLER_CHAT_ID, seller_message, reply_markup=markup)
+                all_orders[order_id]['seller_message_id'] = msg.message_id
+
             except Exception as e:
                 logging.error(f"Ошибка отправки уведомления продавцу: {e}")
 
     except Exception as e:
-        logging.error(f"Ошибка в finalize_order: {e}")
-        bot.send_message(chat_id, "Произошла ошибка при оформлении заказа. Попробуйте еще раз.")
+        logging.error(f"Критическая ошибка в finalize_order для chat_id {chat_id}: {e}", exc_info=True)
+        try:
+            bot.send_message(
+                chat_id,
+                "⚠️ Произошла непредвиденная ошибка при оформлении заказа. "
+                "Администратор уже уведомлен. Пожалуйста, попробуйте позже."
+            )
+        except Exception as send_error:
+            logging.error(f"Не удалось отправить сообщение об ошибке пользователю {chat_id}: {send_error}")
 
+# Обработчик подтверждения заказа продавцом
+@bot.callback_query_handler(func=lambda c: c.data and c.data.startswith("confirm_order_"))
+def handle_confirm_order(call):
+    try:
+        order_id = int(call.data.split("_")[2])
+        order = all_orders.get(order_id)
+
+        if not order:
+            return bot.answer_callback_query(call.id, "Заказ не найден или уже обработан.")
+
+        if order['status'] != 'pending':
+            return bot.answer_callback_query(call.id, f"Заказ уже {order['status']}.")
+
+        # Обновляем статус заказа
+        order['status'] = 'confirmed'
+
+        # Обновляем сообщение у продавца
+        seller_message = (
+            f"🔄 ЗАКАЗ #{order_id} (Подтвержден)\n\n"
+            f"👤 Клиент: {bot.get_chat(order['chat_id']).first_name}\n"
+            f"📱 Телефон: {order['phone']}\n"
+            f"🏠 Адрес: {order['address']}\n\n"
+            f"📦 Товары:\n"
+        )
+
+        for item in order['items']:
+            seller_message += f"• {item['name']} ×{item['quantity']} — {item['cost']}₽\n"
+
+        seller_message += f"\n💰 Общая сумма: {order['total']}₽\n\n"
+        seller_message += f"✅ Статус: Подтвержден (ожидает доставки)"
+
+        # Новые кнопки - только "Доставлено"
+        markup = types.InlineKeyboardMarkup()
+        markup.add(types.InlineKeyboardButton("🚚 Доставлено", callback_data=f"deliver_order_{order_id}"))
+        markup.add(types.InlineKeyboardButton("❌ Отменить", callback_data=f"cancel_order_{order_id}"))
+
+        try:
+            bot.edit_message_text(
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                text=seller_message,
+                reply_markup=markup
+            )
+        except Exception as e:
+            logging.error(f"Ошибка обновления сообщения продавца: {e}")
+
+        # Уведомляем продавца
+        bot.answer_callback_query(call.id, "Заказ подтвержден! Теперь можно отметить как доставленный.")
+
+        # Уведомляем покупателя об изменении статуса
+        user_message = (
+            f"🔄 Ваш заказ #{order_id} обновлен!\n\n"
+            f"✅ Статус: Подтвержден\n\n"
+            f"Продавец подтвердил ваш заказ. Ожидайте доставки."
+        )
+        bot.send_message(order['chat_id'], user_message)
+
+    except Exception as e:
+        logging.error(f"Ошибка подтверждения заказа {order_id}: {e}")
+        bot.answer_callback_query(call.id, "Ошибка подтверждения заказа.")
+
+
+# В обработчике подтверждения доставки (handle_deliver_order)
+@bot.callback_query_handler(func=lambda c: c.data and c.data.startswith("deliver_order_"))
+def handle_deliver_order(call):
+    try:
+        order_id = int(call.data.split("_")[2])
+        order = all_orders.get(order_id)
+
+        if not order:
+            return bot.answer_callback_query(call.id, "Заказ не найден или уже обработан.")
+
+        if order['status'] != 'confirmed':
+            return bot.answer_callback_query(call.id,
+                                             f"Заказ должен быть подтвержден перед доставкой. Текущий статус: {order['status']}")
+
+        # Вычитаем товары из каталога
+        for item in order['items']:
+            try:
+                loader.reduce_stock(item['id'], item['quantity'])
+            except Exception as e:
+                logging.error(f"Ошибка при обновлении количества товара {item['id']}: {e}")
+
+        # Обновляем статус заказа
+        order['status'] = 'delivered'
+
+        # Обновляем сообщение у продавца (убираем кнопки)
+        seller_message = (
+            f"✅ ЗАКАЗ #{order_id} (Доставлен)\n\n"
+            f"👤 Клиент: {bot.get_chat(order['chat_id']).first_name}\n"
+            f"📱 Телефон: {order['phone']}\n"
+            f"🏠 Адрес: {order['address']}\n\n"
+            f"📦 Товары:\n"
+        )
+
+        for item in order['items']:
+            seller_message += f"• {item['name']} ×{item['quantity']} — {item['cost']}₽\n"
+
+        seller_message += f"\n💰 Общая сумма: {order['total']}₽\n\n"
+        seller_message += f"🚚 Статус: Доставлен (товары списаны со склада)"
+
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=seller_message,
+            reply_markup=None  # Убираем все кнопки
+        )
+
+        # Уведомляем продавца
+        bot.answer_callback_query(call.id, "Заказ отмечен как доставленный! Товары списаны.")
+
+        # Уведомляем покупателя
+        user_message = (
+            f"🎉 Ваш заказ #{order_id} обновлен!\n\n"
+            f"🚚 Статус: Доставлен\n\n"
+            f"Ваш заказ был успешно доставлен. Спасибо за покупку!"
+        )
+        bot.send_message(order['chat_id'], user_message)
+
+    except Exception as e:
+        logging.error(f"Ошибка отметки доставки заказа {order_id}: {e}")
+        bot.answer_callback_query(call.id, "Ошибка отметки доставки.")
+
+
+@bot.callback_query_handler(func=lambda c: c.data and c.data.startswith("cancel_order_"))
+def handle_cancel_order(call):
+    try:
+        order_id = int(call.data.split("_")[2])
+        order = all_orders.get(order_id)
+
+        if not order:
+            return bot.answer_callback_query(call.id, "Заказ не найден или уже обработан.")
+
+        # Обновляем статус заказа
+        order['status'] = 'cancelled'
+
+        # Обновляем сообщение у продавца (убираем кнопки)
+        seller_message = (
+            f"❌ ЗАКАЗ #{order_id} (Отменен)\n\n"
+            f"👤 Клиент: {bot.get_chat(order['chat_id']).first_name}\n"
+            f"📱 Телефон: {order['phone']}\n"
+            f"🏠 Адрес: {order['address']}\n\n"
+            f"📦 Товары:\n"
+        )
+
+        for item in order['items']:
+            seller_message += f"• {item['name']} ×{item['quantity']} — {item['cost']}₽\n"
+
+        seller_message += f"\n💰 Общая сумма: {order['total']}₽\n\n"
+        seller_message += f"❌ Статус: Отменен"
+
+        bot.edit_message_text(
+            chat_id=call.message.chat.id,
+            message_id=call.message.message_id,
+            text=seller_message,
+            reply_markup=None  # Убираем все кнопки
+        )
+
+        # Уведомляем продавца
+        bot.answer_callback_query(call.id, "Заказ отменен!")
+
+        # Уведомляем покупателя
+        user_message = (
+            f"😞 Ваш заказ #{order_id} обновлен!\n\n"
+            f"❌ Статус: Отменен\n\n"
+            f"Продавец отменил ваш заказ. Причины:\n"
+            f"- Товары закончились на складе\n"
+            f"- Проблемы с доставкой в ваш регион\n"
+            f"- Техническая ошибка\n\n"
+            f"Пожалуйста, свяжитесь с продавцом для уточнения деталей."
+        )
+        bot.send_message(order['chat_id'], user_message)
+
+    except Exception as e:
+        logging.error(f"Ошибка отмены заказа {order_id}: {e}")
+        bot.answer_callback_query(call.id, "Ошибка отмены заказа.")
 
 @bot.message_handler(func=lambda message: message.text == "🔄 Обновить")
 @bot.message_handler(commands=["reload"])
