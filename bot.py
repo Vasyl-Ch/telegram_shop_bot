@@ -15,12 +15,13 @@ load_dotenv()
 
 # Получаем данные из переменных окружения
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-EXCEL_PATH = os.getenv("EXCEL_PATH")
+GOOGLE_DISK_ID = os.getenv("GOOGLE_DISK_ID")
+JSON_KEY_FILE = os.getenv("JSON_KEY_FILE")
 SELLER_CHAT_ID = os.getenv("SELLER_CHAT_ID")
 
 # Создаем бота и загрузчик каталога
 bot = telebot.TeleBot(BOT_TOKEN)
-loader = CatalogLoader(EXCEL_PATH)
+loader = CatalogLoader(GOOGLE_DISK_ID, JSON_KEY_FILE)
 
 # Хранение корзин: {chat_id: {item_id: quantity}}
 user_carts = {}

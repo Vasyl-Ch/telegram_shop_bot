@@ -3,46 +3,67 @@ import logging
 import os
 from threading import Lock
 from datetime import datetime
+import gspread  # type: ignore
+from google.oauth2.service_account import Credentials  # type: ignore
 
 
 class CatalogLoader:
     """
-    Загружает и хранит в памяти данные каталога из Excel,
+    Загружает и хранит в памяти данные каталога из Google Таблицы,
     позволяет перезагружать данные и обновлять остатки.
     """
 
-    def __init__(self, path: str):
-        self.path = path
+    def __init__(self, google_disk_id: str, json_key_file: str):
+        self.google_disk_id = google_disk_id
+        self.json_key_file = json_key_file
         self.lock = Lock()
         self.last_modified = None
         self.data = {}
+        self.sheet = None
+        self._authenticate()
         self._load()
 
-    def _load(self):
-        """Загружает данные из Excel файла"""
+    def _authenticate(self):
+        """Аутентификация в Google Sheets API"""
         try:
-            if not os.path.exists(self.path):
-                logging.error(f"Excel файл не найден: {self.path}")
-                raise FileNotFoundError(f"Файл {self.path} не найден")
+            # Определяем область доступа
+            scopes = [
+                'https://www.googleapis.com/auth/spreadsheets',
+                'https://www.googleapis.com/auth/drive'
+            ]
+            
+            # Создаем учетные данные
+            creds = Credentials.from_service_account_file(
+                self.json_key_file, 
+                scopes=scopes
+            )
+            
+            # Авторизуем клиент
+            self.client = gspread.authorize(creds)
+            
+            # Открываем таблицу
+            self.spreadsheet = self.client.open_by_key(self.google_disk_id)
+            self.sheet = self.spreadsheet.sheet1  # Используем первый лист
+            
+            logging.info("Успешная аутентификация с Google Таблицами")
+            
+        except Exception as e:
+            logging.error(f"Ошибка аутентификации с Google Таблицами: {e}")
+            raise
 
-            # Проверяем время модификации файла
-            current_modified = os.path.getmtime(self.path)
-            if self.last_modified and current_modified == self.last_modified:
-                return  # Файл не изменился
-
-            # Ожидается, что Excel-файл содержит колонки:
-            # id, name, category, price, stock, image_url
-            try:
-                df = pd.read_excel(self.path, engine='openpyxl')
-            except Exception as e:
-                logging.error(f"Ошибка чтения Excel файла: {e}")
-                raise
-
-            # Проверяем наличие данных
-            if df.empty:
-                logging.warning(f"Excel файл {self.path} пустой")
+    def _load(self):
+        """Загружает данные из Google Таблицы"""
+        try:
+            # Получаем все данные из таблицы
+            data = self.sheet.get_all_records()
+            
+            if not data:
+                logging.warning("Google Таблица пустая")
                 self.data = {}
                 return
+
+            # Создаем DataFrame из данных
+            df = pd.DataFrame(data)
 
             # Проверяем наличие обязательных колонок
             required_columns = ['id', 'name', 'category', 'price', 'stock']
@@ -80,23 +101,59 @@ class CatalogLoader:
 
             # Переводим в словарь вида {id: {name:…, category:…, …}}
             self.data = df.set_index('id').to_dict('index')
-            self.last_modified = current_modified
+            self.last_modified = datetime.now().timestamp()
 
-            logging.info(f"Загружено {len(self.data)} товаров из {self.path}")
+            logging.info(f"Загружено {len(self.data)} товаров из Google Таблицы")
 
         except Exception as e:
             logging.error(f"Ошибка загрузки каталога: {e}")
             if not self.data:  # Если данные еще не загружались
                 raise
 
+    def _save_to_google_sheets(self):
+        """Сохраняет текущие данные в Google Таблицу"""
+        try:
+            # Создаем DataFrame из текущих данных
+            df = pd.DataFrame.from_dict(self.data, orient='index')
+            df = df.reset_index().rename(columns={'index': 'id'})
+
+            # Упорядочиваем колонки
+            columns_order = ['id', 'name', 'category', 'price', 'stock']
+            if 'image_url' in df.columns:
+                columns_order.append('image_url')
+
+            # Добавляем недостающие колонки если их нет
+            for col in columns_order:
+                if col not in df.columns:
+                    df[col] = ''
+
+            df = df[columns_order]
+
+            # Преобразуем DataFrame в список списков для Google Таблицы
+            headers = df.columns.tolist()
+            values = df.values.tolist()
+            all_data = [headers] + values
+
+            # Очищаем лист и записываем новые данные
+            self.sheet.clear()
+            self.sheet.update(all_data)
+
+            self.last_modified = datetime.now().timestamp()
+            logging.info("Данные успешно сохранены в Google Таблицу")
+
+        except Exception as e:
+            logging.error(f"Ошибка сохранения в Google Таблицу: {e}")
+            raise
+
+
     def reload(self):
-        """Перечитывает Excel при изменении файла"""
+        """Перечитывает данные из Google Таблицы"""
         with self.lock:
             try:
                 self._load()
             except Exception as e:
                 logging.error(f"Ошибка при перезагрузке каталога: {e}")
-                # Не поднимаем исключение, чтобы не остановить автоматическое обновление
+
 
     def get_categories(self) -> list:
         """Возвращает список уникальных категорий"""
@@ -126,7 +183,7 @@ class CatalogLoader:
         return item.get('stock', 0) >= quantity
 
     def reduce_stock(self, item_id: int, qty: int):
-        """Уменьшает запас товара и сохраняет изменения в Excel"""
+        """Уменьшает запас товара и сохраняет изменения в Google Таблицу"""
         with self.lock:
             if item_id not in self.data:
                 logging.warning(f"Попытка уменьшить запас несуществующего товара: {item_id}")
@@ -141,70 +198,16 @@ class CatalogLoader:
             original_stock = current_stock
             self.data[item_id]['stock'] = current_stock - qty
 
-            # Сохраняем изменения в Excel файл
+            # Сохраняем изменения в Google Таблицу
             try:
-                self._save_to_excel()
+                self._save_to_google_sheets()
                 logging.info(f"Уменьшен запас товара {item_id} на {qty} единиц")
                 return True
             except Exception as e:
                 # Откатываем изменения в памяти
                 self.data[item_id]['stock'] = original_stock
-                logging.error(f"Ошибка сохранения изменений в Excel: {e}")
+                logging.error(f"Ошибка сохранения изменений в Google Таблицу: {e}")
                 return False
-
-    def _save_to_excel(self):
-        """Сохраняет текущие данные в Excel файл"""
-        try:
-            # Создаем DataFrame из текущих данных
-            df = pd.DataFrame.from_dict(self.data, orient='index')
-            df = df.reset_index().rename(columns={'index': 'id'})
-
-            # Упорядочиваем колонки
-            columns_order = ['id', 'name', 'category', 'price', 'stock']
-            if 'image_url' in df.columns:
-                columns_order.append('image_url')
-
-            # Добавляем недостающие колонки если их нет
-            for col in columns_order:
-                if col not in df.columns:
-                    df[col] = ''
-
-            df = df[columns_order]
-
-            # Создаем резервную копию перед сохранением
-            backup_path = f"{self.path}.backup"
-            if os.path.exists(self.path):
-                try:
-                    import shutil
-                    shutil.copy2(self.path, backup_path)
-                except Exception as e:
-                    logging.warning(f"Не удалось создать резервную копию: {e}")
-
-            # Сохраняем в Excel
-            df.to_excel(self.path, index=False, engine='openpyxl')
-            self.last_modified = os.path.getmtime(self.path)
-            
-            # Удаляем старую резервную копию если сохранение прошло успешно
-            if os.path.exists(backup_path):
-                try:
-                    os.remove(backup_path)
-                except:
-                    pass
-
-        except Exception as e:
-            logging.error(f"Ошибка сохранения в Excel: {e}")
-            
-            # Пытаемся восстановить из резервной копии
-            backup_path = f"{self.path}.backup"
-            if os.path.exists(backup_path):
-                try:
-                    import shutil
-                    shutil.copy2(backup_path, self.path)
-                    logging.info("Восстановлен файл из резервной копии")
-                except Exception as restore_error:
-                    logging.error(f"Ошибка восстановления из резервной копии: {restore_error}")
-            
-            raise
 
     def get_stats(self) -> dict:
         """Возвращает статистику по каталогу"""
@@ -297,7 +300,7 @@ class CatalogLoader:
             }
             
             try:
-                self._save_to_excel()
+                self._save_to_google_sheets()
                 logging.info(f"Добавлен новый товар с ID {new_id}: {name}")
                 return new_id
             except Exception as e:
@@ -305,7 +308,7 @@ class CatalogLoader:
                 del self.data[new_id]
                 logging.error(f"Ошибка добавления товара: {e}")
                 raise
-
+            
     def update_item(self, item_id: int, **kwargs) -> bool:
         """Обновляет информацию о товаре"""
         with self.lock:
@@ -328,7 +331,7 @@ class CatalogLoader:
                         self.data[item_id][field] = str(value)
             
             try:
-                self._save_to_excel()
+                self._save_to_google_sheets()
                 logging.info(f"Обновлен товар ID {item_id}")
                 return True
             except Exception as e:
@@ -351,7 +354,7 @@ class CatalogLoader:
             del self.data[item_id]
             
             try:
-                self._save_to_excel()
+                self._save_to_google_sheets()
                 logging.info(f"Удален товар ID {item_id}: {deleted_item.get('name', 'Без названия')}")
                 return True
             except Exception as e:
