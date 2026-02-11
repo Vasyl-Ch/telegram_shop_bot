@@ -127,17 +127,8 @@ class Container(containers.DeclarativeContainer):
     payment_poller = providers.Singleton(
         PaymentPoller,
         stripe_provider=stripe_provider,
-        get_pending_orders=providers.Callable(
-            lambda: Container.order_service().get_pending_stripe_orders()
-        ),
-        on_payment_success=providers.Callable(
-            lambda order, details: Container.payment_service().handle_payment_success(
-                order, details
-            )
-        ),
-        on_payment_failed=providers.Callable(
-            lambda order: Container.payment_service().handle_payment_failed(order)
-        ),
+        order_service=order_service,
+        payment_service=payment_service,
         poll_interval=config.payment_poll_interval,
         max_age_hours=config.payment_max_age_hours,
     )

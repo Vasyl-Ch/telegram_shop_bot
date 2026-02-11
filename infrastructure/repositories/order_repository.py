@@ -12,7 +12,7 @@ Why in-memory:
 - Sufficient for light/medium loads
 """
 
-import datetime
+from datetime import datetime
 import json
 from decimal import Decimal
 from pathlib import Path
@@ -84,7 +84,16 @@ class OrderRepository(BaseRepository[Order]):
             with open(temp_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
-            temp_file.replace(self._persistence_file)
+            try:
+                temp_file.replace(self._persistence_file)
+            except PermissionError:
+                logger.warning("⚠️ Permission denied for atomic replace, using direct write")
+                with open(self._persistence_file, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+                try:
+                    temp_file.unlink()
+                except:
+                    pass
 
             logger.debug(f"💾 Saved {len(self._orders)} orders to disk")
 

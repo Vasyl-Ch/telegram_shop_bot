@@ -40,9 +40,8 @@ class PaymentPoller:
     def __init__(
         self,
         stripe_provider: StripeProvider,
-        get_pending_orders: Callable[[], List[Order]],
-        on_payment_success: Callable[[Order, dict], None],
-        on_payment_failed: Callable[[Order], None],
+        order_service,
+        payment_service,
         poll_interval: int = 60,
         max_age_hours: int = 24,
     ):
@@ -58,9 +57,8 @@ class PaymentPoller:
             max_age_hours: Maximum Order Age for Verification
         """
         self.stripe_provider = stripe_provider
-        self.get_pending_orders = get_pending_orders
-        self.on_payment_success = on_payment_success
-        self.on_payment_failed = on_payment_failed
+        self.order_service = order_service
+        self.payment_service = payment_service
         self.poll_interval = poll_interval
         self.max_age_hours = max_age_hours
 
@@ -154,7 +152,7 @@ class PaymentPoller:
         4. Calls callbacks when status changes
         """
         try:
-            pending_orders = self.get_pending_orders()
+            pending_orders = self.order_service.get_pending_stripe_orders()
 
             if not pending_orders:
                 logger.debug("ℹ️ No pending payments to check")
@@ -230,7 +228,7 @@ class PaymentPoller:
                 if payment_status != "paid":
                     logger.warning(f"⏰ Session EXPIRED for order #{order.order_id}")
                     try:
-                        self.on_payment_failed(order)
+                        self.payment_service.handle_payment_failed(order)
                         return "failed"
                     except Exception as e:
                         logger.error(
@@ -242,7 +240,7 @@ class PaymentPoller:
                 logger.info(f"✅ Payment SUCCESS for order #{order.order_id}")
 
                 try:
-                    self.on_payment_success(order, session_details)
+                    self.payment_service.handle_payment_success(order, session_details)
                     return "success"
                 except Exception as e:
                     logger.error(
@@ -255,7 +253,7 @@ class PaymentPoller:
                     logger.warning(f"⏰ Payment EXPIRED for order #{order.order_id}")
 
                     try:
-                        self.on_payment_failed(order)
+                        self.payment_service.handle_payment_failed(order)
                         return "failed"
                     except Exception as e:
                         logger.error(
@@ -268,7 +266,7 @@ class PaymentPoller:
                 logger.info(f"❌ Payment CANCELLED for order #{order.order_id}")
 
                 try:
-                    self.on_payment_failed(order)
+                    self.payment_service.handle_payment_failed(order)
                     return "failed"
                 except Exception as e:
                     logger.error(

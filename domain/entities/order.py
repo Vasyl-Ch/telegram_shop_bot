@@ -173,7 +173,7 @@ class Order:
         if method == PaymentMethod.STRIPE:
             self.update_status(OrderStatus.PENDING_PAYMENT)
         elif method == PaymentMethod.CASH:
-            self.update_status(OrderStatus.CONFIRMED)
+            self.update_status(OrderStatus.PENDING_CONFIRMATION)
 
         logger.info(f"💳 Order #{self.order_id} payment method set: {method.value}")
 

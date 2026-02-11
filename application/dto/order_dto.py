@@ -39,25 +39,20 @@ class OrderCreateDTO:
     """
 
     chat_id: int
-    """ID пользователя в Telegram."""
-
     phone: str
-    """Номер телефона покупателя."""
-
     address: str
-    """Адрес доставки."""
 
     def __post_init__(self):
         self.phone = self.phone.strip()
         self.address = self.address.strip()
 
-        phone_pattern = (
-            r"^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$"
-        )
-        if not re.match(phone_pattern, self.phone):
+        phone_clean = self.phone.replace(" ", "").replace("-", "").replace(".", "")
+
+        phone_pattern = r"^\+?[0-9]{10,15}$"
+        if not re.match(phone_pattern, phone_clean):
             raise ValueError(
                 f"Некорректный формат телефона: '{self.phone}'. "
-                "Пример: +380 99 123 45 67"
+                "Пример: +380 99 123 45 67 или +380991234567"
             )
 
         if not self.address or len(self.address) < 10:

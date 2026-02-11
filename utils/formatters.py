@@ -117,6 +117,7 @@ def format_order_for_seller(order: Order, customer_name: str) -> str:
     lines = [
         f"🔔 <b>НОВЫЙ ЗАКАЗ #{order.order_id}!</b>\n",
         f"👤 Клиент: {customer_name}",
+        f" ID : {order.chat_id}",
         f"📱 Телефон: {order.phone}",
         f"🏠 Адрес: {order.address}\n",
         "<b>📦 Заказанные товары:</b>",

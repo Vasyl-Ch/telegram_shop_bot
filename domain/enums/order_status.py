@@ -18,7 +18,7 @@ class OrderStatus(str, Enum):
     PENDING_PAYMENT_METHOD → PENDING_PAYMENT → PAID → CONFIRMED → DELIVERED
 
     Flow для наличных:
-    PENDING_PAYMENT_METHOD → CONFIRMED → DELIVERED
+    PENDING_PAYMENT_METHOD → PENDING_CONFIRMATION → CONFIRMED → DELIVERED
 
     Отмена возможна на любом этапе до DELIVERED.
 
@@ -29,6 +29,9 @@ class OrderStatus(str, Enum):
 
     PENDING_PAYMENT = "pending_payment"
     """Ожидает онлайн-оплаты (создана Stripe session)."""
+
+    PENDING_CONFIRMATION = "pending_confirmation"
+    """Ожидает подтверждения менеджером (наличные)."""
 
     PAYMENT_PROCESSING = "payment_processing"
     """Платеж обрабатывается Stripe (редко используется)."""
@@ -63,6 +66,7 @@ class OrderStatus(str, Enum):
         names = {
             self.PENDING_PAYMENT_METHOD: "⏳ Выбор способа оплаты",
             self.PENDING_PAYMENT: "⏳ Ожидает оплаты",
+            self.PENDING_CONFIRMATION: "⏳ Ожидает подтверждения",
             self.PAYMENT_PROCESSING: "🔄 Обработка платежа",
             self.PAID: "✅ Оплачен",
             self.CONFIRMED: "✅ Подтвержден менеджером",
@@ -96,6 +100,7 @@ class OrderStatus(str, Enum):
         """
         return self in [
             OrderStatus.PAID,
+            OrderStatus.PENDING_CONFIRMATION,
             OrderStatus.CONFIRMED,
             OrderStatus.DELIVERED,
         ]
@@ -109,6 +114,7 @@ class OrderStatus(str, Enum):
             bool: True if need manager confirmation
         """
         return self in [
+            OrderStatus.PENDING_CONFIRMATION,
             OrderStatus.PAID,
             OrderStatus.CONFIRMED,
         ]
@@ -123,13 +129,17 @@ class OrderStatus(str, Enum):
         transitions = {
             OrderStatus.PENDING_PAYMENT_METHOD: [
                 OrderStatus.PENDING_PAYMENT,
-                OrderStatus.CONFIRMED,
+                OrderStatus.PENDING_CONFIRMATION,
                 OrderStatus.CANCELLED,
             ],
             OrderStatus.PENDING_PAYMENT: [
                 OrderStatus.PAYMENT_PROCESSING,
                 OrderStatus.PAID,
                 OrderStatus.FAILED,
+                OrderStatus.CANCELLED,
+            ],
+            OrderStatus.PENDING_CONFIRMATION: [
+                OrderStatus.CONFIRMED,
                 OrderStatus.CANCELLED,
             ],
             OrderStatus.PAYMENT_PROCESSING: [

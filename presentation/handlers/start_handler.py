@@ -113,22 +113,39 @@ def _send_welcome(bot: telebot.TeleBot, chat_id: int) -> None:
         bot: Bot instance
         chat_id: Chat ID
     """
-    welcome_text = (
-        "🛒 <b>Добро пожаловать в наш магазин!</b>\n\n"
-        "Используйте кнопки ниже для навигации:"
-    )
-    bot.send_message(
-        chat_id,
-        welcome_text,
-        parse_mode="HTML",
-        reply_markup=get_main_menu_keyboard(),
-    )
-    bot.set_my_commands(
-        [
+    is_seller = str(chat_id) == str(settings.seller_chat_id)
+
+    if is_seller:
+        from presentation.keyboards.main_keyboards import get_seller_main_keyboard
+
+        welcome_text = (
+            "👨‍💼 <b>Добро пожаловать в панель продавца!</b>\n\n"
+            "Используйте кнопки ниже для управления магазином:"
+        )
+        keyboard = get_seller_main_keyboard()
+        commands = [
+            types.BotCommand("start", "Главное меню"),
+            types.BotCommand("seller", "Панель продавца"),
+            types.BotCommand("help", "Помощь"),
+        ]
+    else:
+        welcome_text = (
+            "🛒 <b>Добро пожаловать в наш магазин!</b>\n\n"
+            "Используйте кнопки ниже для навигации:"
+        )
+        keyboard = get_main_menu_keyboard()
+        commands = [
             types.BotCommand("start", "Главное меню"),
             types.BotCommand("help", "Помощь"),
             types.BotCommand("catalog", "Каталог товаров"),
             types.BotCommand("cart", "Корзина"),
             types.BotCommand("orders", "Мои заказы"),
         ]
+
+    bot.send_message(
+        chat_id,
+        welcome_text,
+        parse_mode="HTML",
+        reply_markup=keyboard,
     )
+    bot.set_my_commands(commands)

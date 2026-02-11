@@ -36,6 +36,21 @@ class TTLCache:
         self._cache: OrderedDict[int, tuple[CheckoutStateDTO, datetime]] = OrderedDict()
         self._ttl = timedelta(minutes=ttl_minutes)
 
+    def __setitem__(self, key: int, value: CheckoutStateDTO) -> None:
+        """Allows dict-style assignment: cache[key] = value"""
+        self.set(key, value)
+
+    def __getitem__(self, key: int) -> Optional[CheckoutStateDTO]:
+        """Allows dict-style access: cache[key]"""
+        result = self.get(key)
+        if result is None:
+            raise KeyError(key)
+        return result
+
+    def __contains__(self, key: int) -> bool:
+        """Allows 'key in cache' checks"""
+        return self.get(key) is not None
+
     def set(self, key: int, value: CheckoutStateDTO) -> None:
         """Adds or updates a value."""
         self._cleanup()
@@ -61,6 +76,11 @@ class TTLCache:
             value, _ = self._cache.pop(key)
             return value
         return default
+
+    def items(self):
+        """Returns items for iteration"""
+        self._cleanup()
+        return [(k, v) for k, (v, _) in self._cache.items()]
 
     def _cleanup(self) -> None:
         """Deletes obsolete records."""

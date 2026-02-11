@@ -50,7 +50,9 @@ def create_bot() -> telebot.TeleBot:
 
     bot.setup_middleware(LoggingMiddleware())
     bot.setup_middleware(RateLimitMiddleware(max_requests=10, time_window=10))
-    bot.setup_middleware(BanCheckMiddleware(containers.Container.user_limit_repository()))
+    bot.setup_middleware(
+        BanCheckMiddleware(containers.Container.user_limit_repository())
+    )
 
     return bot
 
