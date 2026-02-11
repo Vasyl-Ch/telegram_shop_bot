@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="Black">
+    <option name="enabledOnReformat" value="true" />
     <option name="pathToExecutable" value="D:\Python3.13\Scripts\black.exe" />
     <option name="sdkName" value="Python 3.14 (telegram_shop_bot)" />
   </component>
