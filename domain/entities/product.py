@@ -1,10 +1,10 @@
 """
-Product entity (доменная модель товара).
+Product entity (domain model of the product).
 
-Применение DDD (Domain-Driven Design):
-- Товар - это Value Object (идентифицируется по ID)
-- Неизменяемый (immutable) для потокобезопасности
-- Инкапсулирует бизнес-логику товара
+Applications of DDD (Domain-Driven Design):
+- The product is a Value Object (identified by ID)
+- Immutable for thread safety
+- Encapsulates the business logic of the product
 """
 
 from dataclasses import dataclass
@@ -15,42 +15,31 @@ from typing import Optional
 @dataclass(frozen=True)
 class Product:
     """
-    Доменная модель товара.
+    Domain model of the product.
 
-    Почему frozen=True:
-    - Потокобезопасность (immutable)
-    - Предотвращает случайное изменение
-    - Можно использовать как ключ в dict/set
+    Why frozen=True:
+    - Thread safety (immutable)
+    - Prevents accidental change
+    - Can be used as a key in dict/set
 
-    Почему Decimal для цены:
-    - Точная арифметика для денежных операций
-    - Избегаем проблем с float (0.1 + 0.2 != 0.3)
+    Why Decimal for Pricing:
+    - Precise arithmetic for monetary transactions
+    - Avoiding float problems (0.1 + 0.2 != 0.3)
     """
 
     product_id: int
-    """Уникальный идентификатор товара."""
-
     name: str
-    """Название товара."""
-
     category: str
-    """Категория товара."""
-
     price: Decimal
-    """Цена за единицу товара."""
-
     stock: int
-    """Количество на складе."""
-
     image_url: Optional[str] = None
-    """URL изображения товара (опционально)."""
 
     def __post_init__(self):
         """
-        Валидация после инициализации.
+        Validation after initialization.
 
         Raises:
-            ValueError: Если данные невалидны
+            ValueError: If the data is invalid
         """
         if self.product_id <= 0:
             raise ValueError(f"Invalid product_id: {self.product_id}")
@@ -67,30 +56,30 @@ class Product:
     @property
     def is_available(self) -> bool:
         """
-        Проверка доступности товара.
+        Checking the availability of goods.
 
         Returns:
-            bool: True если товар в наличии
+            bool: True if the product is in stock
         """
         return self.stock > 0
 
     @property
     def display_price(self) -> str:
         """
-        Форматированная цена для отображения.
+        Formatted price to display.
 
         Returns:
-            str: Цена с валютой
+            str: Price with currency
         """
-        return f"{self.price:.2f}₽"
+        return f"{self.price:.2f}"
 
     @property
     def stock_status(self) -> str:
         """
-        Статус наличия товара.
+        Availability status of the product.
 
         Returns:
-            str: Текстовое описание статуса
+            str: Textual description of the status
         """
         if self.stock == 0:
             return "❌ Нет в наличии"
@@ -101,60 +90,60 @@ class Product:
 
     def can_fulfill_quantity(self, quantity: int) -> bool:
         """
-        Проверяет возможность выполнения заказа на указанное количество.
+        Checks the ability to fulfill the order for the specified quantity.
 
         Args:
-            quantity: Требуемое количество
+            quantity: Required quantity
 
         Returns:
-            bool: True если на складе достаточно товара
+            bool: True if there are enough goods in stock
         """
         return self.stock >= quantity
 
     def calculate_total(self, quantity: int) -> Decimal:
         """
-        Вычисляет стоимость для указанного количества.
+        Calculates the cost for the specified quantity.
 
         Args:
-            quantity: Количество товара
+            quantity: Quantity of goods
 
         Returns:
-            Decimal: Общая стоимость
+            Decimal: Total Cost
         """
         return self.price * quantity
 
     @classmethod
-    def from_dict(cls, data: dict) -> 'Product':
+    def from_dict(cls, data: dict) -> "Product":
         """
-        Создает Product из словаря (фабричный метод).
+        Creates a Product from a dictionary (factory method).
 
         Args:
-            data: Словарь с данными товара
+            data: Dictionary with product data
 
         Returns:
-            Product: Новый экземпляр товара
+            Product: A new copy of the product
         """
         return cls(
-            product_id=int(data['id']),
-            name=str(data['name']),
-            category=str(data.get('category', 'Разное')),
-            price=Decimal(str(data['price'])),
-            stock=int(data['stock']),
-            image_url=data.get('image_url'),
+            product_id=int(data["id"]),
+            name=str(data["name"]),
+            category=str(data.get("category", "Разное")),
+            price=Decimal(str(data["price"])),
+            stock=int(data["stock"]),
+            image_url=data.get("image_url"),
         )
 
     def to_dict(self) -> dict:
         """
-        Преобразует Product в словарь.
+        Converts Product to a dictionary.
 
         Returns:
-            dict: Данные товара
+            dict: Product data
         """
         return {
-            'id': self.product_id,
-            'name': self.name,
-            'category': self.category,
-            'price': float(self.price),
-            'stock': self.stock,
-            'image_url': self.image_url or '',
+            "id": self.product_id,
+            "name": self.name,
+            "category": self.category,
+            "price": float(self.price),
+            "stock": self.stock,
+            "image_url": self.image_url or "",
         }

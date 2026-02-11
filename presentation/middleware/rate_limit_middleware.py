@@ -1,8 +1,8 @@
 """
-Middleware для rate limiting.
+Middleware for rate limiting.
 
-Защита от spam-атак: ограничивает количество запросов
-от одного пользователя за единицу времени.
+Spam Protection: Limits the number of requests
+from one user per unit of time.
 """
 
 import time
@@ -15,31 +15,30 @@ logger = logging.getLogger(__name__)
 
 class RateLimitMiddleware(BaseMiddleware):
     """
-    Middleware для ограничения частоты запросов.
+    Middleware to limit the request rate.
 
-    Применение Sliding Window Algorithm:
-    - Отслеживает последние N запросов пользователя
-    - Блокирует при превышении лимита
-    - Автоматически очищает устаревшие записи
+    Applying the Sliding Window Algorithm:
+    - Tracks the user's last N requests
+    - Blocks when the limit is exceeded
+    - Automatically cleans up outdated records
 
     Args:
-        max_requests: Максимум запросов за time_window
-        time_window: Временное окно (секунды)
+        max_requests: Maximum requests per time_window
+        time_window: Time window (seconds)
     """
 
     def __init__(self, max_requests: int = 10, time_window: int = 10):
         """
-        Инициализация middleware.
+        Middleware initialization.
 
         Args:
-            max_requests: Лимит запросов (по умолчанию 10)
-            time_window: Окно в секундах (по умолчанию 10)
+            max_requests: Request Limit (Default 10)
+            time_window: Window in seconds (10 by default)
         """
         self.update_types = ["message", "callback_query"]
         self.max_requests = max_requests
         self.time_window = time_window
 
-        # Хранилище: {user_id: [timestamp1, timestamp2, ...]}
         self._requests: dict[int, list[float]] = defaultdict(list)
 
         super().__init__()
@@ -51,14 +50,14 @@ class RateLimitMiddleware(BaseMiddleware):
 
     def pre_process(self, message, data):
         """
-        Проверяет лимит перед обработкой сообщения.
+        Checks the limit before processing the message.
 
         Args:
-            message: Message или CallbackQuery
-            data: Дополнительные данные
+            message: Message or CallbackQuery
+            data: Additional data
 
         Raises:
-            Exception: При превышении лимита
+            Exception: When the limit is exceeded
         """
         user_id = self._get_user_id(message)
         if not user_id:
@@ -67,16 +66,15 @@ class RateLimitMiddleware(BaseMiddleware):
         now = time.time()
 
         # ════════════════════════════════════════════════════════
-        # Очистка устаревших записей (Sliding Window)
+        # Clearing Stale Records (Sliding Window)
         # ════════════════════════════════════════════════════════
 
         self._requests[user_id] = [
-            ts for ts in self._requests[user_id]
-            if now - ts < self.time_window
+            ts for ts in self._requests[user_id] if now - ts < self.time_window
         ]
 
         # ════════════════════════════════════════════════════════
-        # Проверка лимита
+        # Checking the limit
         # ════════════════════════════════════════════════════════
 
         if len(self._requests[user_id]) >= self.max_requests:
@@ -85,31 +83,29 @@ class RateLimitMiddleware(BaseMiddleware):
                 f"({len(self._requests[user_id])} requests)"
             )
 
-            # Отправляем уведомление пользователю
             self._send_limit_warning(message)
 
-            # Блокируем дальнейшую обработку
             raise Exception("Rate limit exceeded")
 
         # ════════════════════════════════════════════════════════
-        # Регистрируем текущий запрос
+        # Log the current request
         # ════════════════════════════════════════════════════════
 
         self._requests[user_id].append(now)
 
     def post_process(self, message, data, exception):
-        """Обработка после выполнения handler'а."""
+        """Processing after the execution of the handler."""
         pass
 
     def _get_user_id(self, message) -> int:
         """
-        Извлекает user_id из сообщения.
+        Retrieves user_id from the message.
 
         Args:
-            message: Message или CallbackQuery
+            message: Message or CallbackQuery
 
         Returns:
-            int: ID пользователя или 0
+            int: user ID or 0
         """
         if isinstance(message, types.Message):
             return message.from_user.id
@@ -119,10 +115,10 @@ class RateLimitMiddleware(BaseMiddleware):
 
     def _send_limit_warning(self, message):
         """
-        Отправляет предупреждение о превышении лимита.
+        Sends a warning when the limit is exceeded.
 
         Args:
-            message: Message или CallbackQuery
+            message: Message or CallbackQuery
         """
         try:
             warning_text = (
@@ -134,15 +130,11 @@ class RateLimitMiddleware(BaseMiddleware):
 
             if isinstance(message, types.Message):
                 message.bot.send_message(
-                    message.chat.id,
-                    warning_text,
-                    parse_mode="HTML"
+                    message.chat.id, warning_text, parse_mode="HTML"
                 )
             elif isinstance(message, types.CallbackQuery):
                 message.bot.answer_callback_query(
-                    message.id,
-                    "⚠️ Слишком много запросов. Подождите.",
-                    show_alert=True
+                    message.id, "⚠️ Слишком много запросов. Подождите.", show_alert=True
                 )
         except Exception as e:
             logger.error(f"Failed to send rate limit warning: {e}")

@@ -1,10 +1,10 @@
 """
-Notification Service — отправка уведомлений через Telegram.
+Notification Service — sending notifications via Telegram.
 
-Инкапсулирует всю логику уведомлений:
-- Уведомления покупателю об изменениях заказа
-- Уведомления продавцу о новых заказах
-- Уведомления об оплате
+Encapsulates all notification logic:
+- Notifications to the buyer about order changes
+- Notifications to the seller about new orders
+- Payment notifications
 """
 
 import logging
@@ -22,16 +22,16 @@ logger = logging.getLogger(__name__)
 
 class NotificationService:
     """
-    Сервис уведомлений.
+    Notification service.
 
-    Dependency Injection: получает bot и seller_chat_id через конструктор.
+    Dependency Injection: Gets the bot and seller_chat_id through the constructor.
     """
 
     def __init__(self, bot: telebot.TeleBot, seller_chat_id: str):
         """
         Args:
-            bot: Инстанс Telegram бота
-            seller_chat_id: ID чата продавца
+            bot: Telegram bot instance
+            seller_chat_id: Merchant Chat ID
         """
         self._bot = bot
         self._seller_chat_id = seller_chat_id
@@ -39,31 +39,27 @@ class NotificationService:
 
     def notify_order_created(self, order: Order, payment_url: str = None) -> None:
         """
-        Уведомляет покупателя о создании заказа.
+        Notifies the buyer that an order has been created.
 
         Args:
-            order: Созданный заказ
-            payment_url: URL для оплаты (если Stripe)
+            order: Created order
+            payment_url: Payment URL (if Stripe)
         """
         try:
             text = (
                 f"✅ <b>Заказ #{order.order_id} создан!</b>\n\n"
                 + format_order_for_customer(order)
             )
-            self._bot.send_message(
-                order.chat_id,
-                text,
-                parse_mode="HTML"
-            )
+            self._bot.send_message(order.chat_id, text, parse_mode="HTML")
         except Exception as e:
             logger.error(f"notify_order_created error: {e}")
 
     def notify_order_status_changed(self, order: Order) -> None:
         """
-        Уведомляет покупателя об изменении статуса заказа.
+        Notifies the buyer of a change in the status of the order.
 
         Args:
-            order: Заказ с обновлённым статусом
+            order: Order with updated status
         """
         try:
             self._bot.send_message(
@@ -81,15 +77,15 @@ class NotificationService:
         keyboard=None,
     ) -> int:
         """
-        Уведомляет продавца о новом заказе.
+        Notifies the seller of a new order.
 
         Args:
-            order: Заказ
-            customer_name: Имя покупателя
-            keyboard: InlineKeyboard для сообщения
+            order: Order
+            customer_name: Buyer's Name
+            keyboard: InlineKeyboard for the message
 
         Returns:
-            int: ID отправленного сообщения
+            int: ID of the sent message
         """
         if not self._seller_chat_id:
             return 0
@@ -113,11 +109,11 @@ class NotificationService:
         customer_name: str,
     ) -> None:
         """
-        Уведомляет продавца об успешной оплате.
+        Notifies the seller of a successful payment.
 
         Args:
-            order: Оплаченный заказ
-            customer_name: Имя покупателя
+            order: Paid order
+            customer_name: Buyer's Name
         """
         if not self._seller_chat_id:
             return
@@ -137,11 +133,11 @@ class NotificationService:
 
     def notify_low_stock(self, product_name: str, remaining: int) -> None:
         """
-        Уведомляет продавца о низком остатке товара.
+        Notifies the seller that the stock is low.
 
         Args:
-            product_name: Название товара
-            remaining: Остаток на складе
+            product_name: Product Name
+            remaining: Stock balance
         """
         if not self._seller_chat_id:
             return

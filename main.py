@@ -1,15 +1,15 @@
 """
-Точка входа приложения.
+The entry point of the application.
 
-Composition Root — здесь создаются все зависимости
-и связываются воедино через DI Container.
+Composition Root – This is where all dependencies are created
+and communicate together via DI Container.
 
-Структура запуска:
-1. Загрузка конфига
-2. Создание DI Container
-3. Создание и настройка бота
-4. Регистрация handlers
-5. Запуск polling + background workers
+Launch structure:
+1. Loading the config
+2. Creating a DI Container
+3. Creating and configuring a bot
+4. Registration handlers
+5. Running polling + background workers
 """
 
 import logging
@@ -22,24 +22,22 @@ from config.settings import settings
 from config.containers import Container
 from utils.logger import setup_logging
 
-# Presentation Handlers
 from presentation.handlers.start_handler import register_start_handlers
 from presentation.handlers.catalog_handler import register_catalog_handlers
 from presentation.handlers.cart_handler import register_cart_handlers
 from presentation.handlers.checkout_handler import register_checkout_handlers
 from presentation.handlers.seller_handler import register_seller_handlers
 
-# Middleware
 from presentation.middleware.logging_middleware import LoggingMiddleware
 from presentation.middleware.rate_limit_middleware import RateLimitMiddleware
 
 
 def create_bot() -> telebot.TeleBot:
     """
-    Создаёт и конфигурирует инстанс бота.
+    Creates and configures a bot instance.
 
     Returns:
-        telebot.TeleBot: Настроенный бот
+        telebot. TeleBot: Customized Bot
     """
     bot = telebot.TeleBot(
         token=settings.bot_token,
@@ -48,38 +46,33 @@ def create_bot() -> telebot.TeleBot:
         use_class_middlewares=True,
     )
 
-    # ✅ Подключаем middleware
     bot.setup_middleware(LoggingMiddleware())
-    bot.setup_middleware(
-        RateLimitMiddleware(
-            max_requests=10,
-            time_window=10
-        )
-    )
+    bot.setup_middleware(RateLimitMiddleware(max_requests=10, time_window=10))
 
     return bot
 
 
 def setup_container() -> Container:
     """
-    Создаёт и настраивает DI Container.
+    Creates and configures a DI Container.
 
     Returns:
-        Container: Настроенный контейнер зависимостей
+        Container: Configured dependency container
     """
     logger = logging.getLogger(__name__)
     logger.info("🔧 Setting up DI Container...")
 
     container = Container()
 
-    # Загружаем конфигурацию из settings
-    container.config.from_dict({
-        'google_disk_id': settings.google_disk_id,
-        'json_key_file': settings.json_key_file,
-        'seller_chat_id': settings.seller_chat_id,
-        'payment_poll_interval': settings.payment_poll_interval,
-        'payment_max_age_hours': settings.payment_max_age_hours,
-    })
+    container.config.from_dict(
+        {
+            "google_disk_id": settings.google_disk_id,
+            "json_key_file": settings.json_key_file,
+            "seller_chat_id": settings.seller_chat_id,
+            "payment_poll_interval": settings.payment_poll_interval,
+            "payment_max_age_hours": settings.payment_max_age_hours,
+        }
+    )
 
     logger.info("✅ DI Container configured")
 
@@ -88,22 +81,22 @@ def setup_container() -> Container:
 
 def register_all_handlers(bot: telebot.TeleBot, container: Container) -> None:
     """
-    Регистрирует все handlers бота.
+    Registers all handlers of the bot.
 
     Args:
-        bot: Инстанс бота
-        container: DI контейнер
+        bot: Bot instance
+        container: DI container
     """
     logger = logging.getLogger(__name__)
 
     # ════════════════════════════════════════════════════════════
-    # Базовые handlers
+    # Basic handlers
     # ════════════════════════════════════════════════════════════
 
     register_start_handlers(bot)
 
     # ════════════════════════════════════════════════════════════
-    # Каталог
+    # Catalog
     # ════════════════════════════════════════════════════════════
 
     register_catalog_handlers(
@@ -113,7 +106,7 @@ def register_all_handlers(bot: telebot.TeleBot, container: Container) -> None:
     )
 
     # ════════════════════════════════════════════════════════════
-    # Корзина
+    # Cart
     # ════════════════════════════════════════════════════════════
 
     register_cart_handlers(
@@ -123,7 +116,7 @@ def register_all_handlers(bot: telebot.TeleBot, container: Container) -> None:
     )
 
     # ════════════════════════════════════════════════════════════
-    # Checkout (оформление заказа)
+    # Checkout (placing an order)
     # ════════════════════════════════════════════════════════════
 
     register_checkout_handlers(
@@ -138,7 +131,7 @@ def register_all_handlers(bot: telebot.TeleBot, container: Container) -> None:
     )
 
     # ════════════════════════════════════════════════════════════
-    # Seller panel (панель продавца)
+    # Seller panel (Seller Panel)
     # ════════════════════════════════════════════════════════════
 
     register_seller_handlers(
@@ -154,10 +147,10 @@ def register_all_handlers(bot: telebot.TeleBot, container: Container) -> None:
 
 def start_background_workers(container: Container) -> None:
     """
-    Запускает фоновые workers.
+    Starts background workers.
 
     Args:
-        container: DI контейнер
+        container: DI container
     """
     logger = logging.getLogger(__name__)
 
@@ -170,15 +163,15 @@ def start_background_workers(container: Container) -> None:
     logger.info("🚀 Payment poller started")
 
     # ════════════════════════════════════════════════════════════
-    # Catalog Auto-Reload (каждые 5 минут)
+    # Catalog Auto-Reload (every 5 minutes)
     # ════════════════════════════════════════════════════════════
 
     def auto_reload_catalog():
-        """Фоновый worker для автообновления каталога."""
+        """Background worker for auto-updating the directory."""
         catalog_repo = container.catalog_repository()
 
         while True:
-            time.sleep(300)  # 5 минут
+            time.sleep(300)
             try:
                 catalog_repo.reload()
                 logger.info("🔄 Catalog auto-reloaded")
@@ -196,16 +189,16 @@ def start_background_workers(container: Container) -> None:
 
 def ensure_data_directory():
     """
-    Создаёт директорию data/ для хранения persistence файлов.
+    Creates a data/ directory to store persistence files.
     """
-    os.makedirs('data', exist_ok=True)
+    os.makedirs("data", exist_ok=True)
 
 
 def main() -> None:
-    """Точка входа приложения."""
+    """The entry point of the application."""
 
     # ════════════════════════════════════════════════════════════
-    # 1. Настройка логирования
+    # 1. Setting up logging
     # ════════════════════════════════════════════════════════════
 
     setup_logging(settings.log_level)
@@ -218,48 +211,47 @@ def main() -> None:
     logger.info("=" * 60)
 
     # ════════════════════════════════════════════════════════════
-    # 2. Создание директории для данных
+    # 2. Creating a directory for data
     # ════════════════════════════════════════════════════════════
 
     ensure_data_directory()
 
     # ════════════════════════════════════════════════════════════
-    # 3. Создание DI Container
+    # 3. Creating a DI Container
     # ════════════════════════════════════════════════════════════
 
     container = setup_container()
 
     # ════════════════════════════════════════════════════════════
-    # 4. Создание бота
+    # 4. Creating a bot
     # ════════════════════════════════════════════════════════════
 
     bot = create_bot()
 
     # ════════════════════════════════════════════════════════════
-    # 5. Инжектим бота в NotificationService
+    # 5. Inject the bot into NotificationService
     # ════════════════════════════════════════════════════════════
 
-    # NotificationService создан с bot=None в контейнере,
-    # теперь обновляем его
+
     notification_service = container.notification_service()
     notification_service._bot = bot
 
     logger.info("✅ Bot instance injected into NotificationService")
 
     # ════════════════════════════════════════════════════════════
-    # 6. Регистрация handlers
+    # 6. Registering handlers
     # ════════════════════════════════════════════════════════════
 
     register_all_handlers(bot, container)
 
     # ════════════════════════════════════════════════════════════
-    # 7. Запуск фоновых workers
+    # 7. Running background workers
     # ════════════════════════════════════════════════════════════
 
     start_background_workers(container)
 
     # ════════════════════════════════════════════════════════════
-    # 8. Запуск бота
+    # 8. Running the bot
     # ════════════════════════════════════════════════════════════
 
     logger.info("✅ Bot is ready. Press Ctrl+C to stop.")
@@ -282,7 +274,6 @@ def main() -> None:
 
         logger.info("🔄 Shutting down gracefully...")
 
-        # Останавливаем payment poller
         poller = container.payment_poller()
         poller.stop()
 

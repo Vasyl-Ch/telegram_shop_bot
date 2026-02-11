@@ -1,21 +1,17 @@
 """
-ReplyKeyboard клавиатуры (постоянное меню снизу).
-"""
+ReplyKeyboard keyboard (persistent menu at the bottom)."""
 
 from telebot import types
 
 
 def get_main_menu_keyboard() -> types.ReplyKeyboardMarkup:
     """
-    Главное меню бота.
+    The main menu of the bot.
 
     Returns:
-        ReplyKeyboardMarkup: Клавиатура главного меню
+        ReplyKeyboardMarkup: Main Menu Keyboard
     """
-    markup = types.ReplyKeyboardMarkup(
-        resize_keyboard=True,
-        row_width=2
-    )
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.row(
         types.KeyboardButton("🗂 Категории"),
         types.KeyboardButton("📋 Каталог"),
@@ -33,30 +29,24 @@ def get_main_menu_keyboard() -> types.ReplyKeyboardMarkup:
 
 def get_cancel_keyboard() -> types.ReplyKeyboardMarkup:
     """
-    Клавиатура с кнопкой отмены (для step-by-step форм).
+    Keyboard with an undo button (for step-by-step forms).
 
     Returns:
-        ReplyKeyboardMarkup: Клавиатура с отменой
+        ReplyKeyboardMarkup: Undo keyboard
     """
-    markup = types.ReplyKeyboardMarkup(
-        resize_keyboard=True,
-        row_width=1
-    )
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
     markup.add(types.KeyboardButton("❌ Отменить оформление"))
     return markup
 
 
 def get_seller_main_keyboard() -> types.ReplyKeyboardMarkup:
     """
-    Клавиатура главного меню продавца.
+    The keypad of the seller's main menu.
 
     Returns:
-        ReplyKeyboardMarkup: Клавиатура продавца
+        ReplyKeyboardMarkup: Seller's Keyboard
     """
-    markup = types.ReplyKeyboardMarkup(
-        resize_keyboard=True,
-        row_width=2
-    )
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.row(
         types.KeyboardButton("📋 Активные заказы"),
         types.KeyboardButton("✅ Выполненные"),

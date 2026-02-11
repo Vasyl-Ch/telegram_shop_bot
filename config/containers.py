@@ -1,16 +1,12 @@
 """
 Dependency Injection Container.
 
-Централизованное управление зависимостями всего приложения.
-Использует паттерн Service Locator через dependency-injector.
+Centrally manage application-wide dependencies.
+Uses the Service Locator pattern via dependency-injector.
 """
 
 from dependency_injector import containers, providers
-import telebot
 
-from config.settings import settings
-
-# Infrastructure
 from infrastructure.external.google_sheets_client import GoogleSheetsClient
 from infrastructure.repositories.order_repository import OrderRepository
 from infrastructure.repositories.cart_repository import CartRepository
@@ -19,7 +15,6 @@ from infrastructure.payments.stripe_provider import StripeProvider
 from infrastructure.payments.cash_provider import CashProvider
 from infrastructure.payments.payment_poller import PaymentPoller
 
-# Application Services
 from application.services.order_service import OrderService
 from application.services.cart_service import CartService
 from application.services.payment_service import PaymentService
@@ -28,13 +23,13 @@ from application.services.notification_service import NotificationService
 
 class Container(containers.DeclarativeContainer):
     """
-    Контейнер зависимостей приложения.
+    Application dependency container.
 
-    Применение Dependency Injection Pattern:
-    - Инверсия зависимостей (SOLID)
-    - Централизованная конфигурация
-    - Легкая замена реализаций
-    - Упрощенное тестирование
+    Application of Dependency Injection Pattern:
+    - Dependency Inversion (SOLID)
+    - Centralized configuration
+    - Easy replacement of implementations
+    - Simplified testing
     """
 
     # ══════════════════════════════════════════════════════════════
@@ -59,7 +54,7 @@ class Container(containers.DeclarativeContainer):
 
     order_repository = providers.Singleton(
         OrderRepository,
-        persistence_file="data/orders.json",  # ✅ Добавлена персистентность
+        persistence_file="data/orders.json",
     )
 
     cart_repository = providers.Singleton(
@@ -101,7 +96,7 @@ class Container(containers.DeclarativeContainer):
 
     notification_service = providers.Singleton(
         NotificationService,
-        bot=providers.Object(None),  # Будет установлен позже
+        bot=providers.Object(None),
         seller_chat_id=config.seller_chat_id,
     )
 
@@ -124,7 +119,9 @@ class Container(containers.DeclarativeContainer):
             lambda: Container.order_service().get_pending_stripe_orders()
         ),
         on_payment_success=providers.Callable(
-            lambda order, details: Container.payment_service().handle_payment_success(order, details)
+            lambda order, details: Container.payment_service().handle_payment_success(
+                order, details
+            )
         ),
         on_payment_failed=providers.Callable(
             lambda order: Container.payment_service().handle_payment_failed(order)

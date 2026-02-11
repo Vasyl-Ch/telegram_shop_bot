@@ -1,15 +1,15 @@
 """
-Абстрактный интерфейс платежного провайдера.
+Abstract payment provider interface.
 
-Применение SOLID:
-- Interface Segregation: минимальный набор методов
-- Dependency Inversion: зависимость от абстракции
-- Open/Closed: закрыт для изменений, открыт для расширения
+Applications of SOLID:
+- Interface Segregation: A minimum set of methods
+- Dependency Inversion: Dependency on Abstraction
+- Open/Closed: Closed for changes, open for expansion
 
-Паттерн Strategy:
-- Разные способы оплаты реализуют один интерфейс
-- Легко добавлять новые провайдеры
-- Взаимозаменяемость
+Strategy Pattern:
+- Different payment methods implement the same interface
+- Easy to add new providers
+- Interchangeability
 """
 
 from abc import ABC, abstractmethod
@@ -19,70 +19,70 @@ from domain.entities.order import Order
 
 class PaymentProvider(ABC):
     """
-    Абстрактный интерфейс платежного провайдера.
+    Abstract payment provider interface.
 
-    Любой новый провайдер (PayPal, Crypto и т.д.) должен
-    реализовать этот интерфейс.
+    Any new provider (PayPal, Crypto, etc.) should
+    implement this interface.
     """
 
     @abstractmethod
     async def create_payment(self, order: Order) -> Dict[str, Any]:
         """
-        Создает платеж для заказа.
+        Creates a payment for the order.
 
         Args:
-            order: Заказ для оплаты
+            order: Order for payment
 
         Returns:
-            Dict с данными платежа:
+            Dict with payment details:
             {
-                'payment_url': Optional[str],  # URL для оплаты (если есть)
-                'payment_id': str,             # ID платежа в системе провайдера
-                'status': str,                 # Статус платежа
-                'metadata': dict               # Дополнительные данные
+                'payment_url': Optional[str], # URL for payment (if any)
+                'payment_id': str, # payment ID in the provider's system
+                'status': str, # Payment status
+                'metadata': dict # Additional data
             }
 
         Raises:
-            PaymentProviderError: при ошибке создания платежа
+            PaymentProviderError: On payment creation error
         """
         pass
 
     @abstractmethod
     async def verify_payment(self, payment_id: str) -> bool:
         """
-        Проверяет статус платежа.
+        Checks the status of the payment.
 
         Args:
-            payment_id: ID платежа в системе провайдера
+            payment_id: Payment ID in the provider's system
 
         Returns:
-            bool: True если платеж успешен, False иначе
+            bool: True if the payment is successful, False otherwise
         """
         pass
 
     @abstractmethod
     async def get_payment_details(self, payment_id: str) -> Optional[Dict[str, Any]]:
         """
-        Получает детальную информацию о платеже.
+        Receives detailed information about the payment.
 
         Args:
-            payment_id: ID платежа
+            payment_id: Payment ID
 
         Returns:
-            Optional[Dict]: Детали платежа или None если не найден
+            Optional[Dict]: Payment details or None if not found
         """
         pass
 
     @abstractmethod
     async def cancel_payment(self, payment_id: str) -> bool:
         """
-        Отменяет платеж (если возможно).
+        Cancels the payment (if possible).
 
         Args:
-            payment_id: ID платежа
+            payment_id: Payment ID
 
         Returns:
-            bool: True если отмена успешна
+            bool: True if the cancellation is successful
         """
         pass
 
@@ -90,19 +90,20 @@ class PaymentProvider(ABC):
     @abstractmethod
     def provider_name(self) -> str:
         """
-        Название провайдера для логирования.
+        Name of the provider for logging.
 
         Returns:
-            str: Название провайдера
+            str: Provider name
         """
         pass
 
 
 class PaymentProviderError(Exception):
     """
-    Исключение для ошибок платежного провайдера.
+    Exception for payment provider errors.
 
-    Используется для абстрагирования от конкретных ошибок
-    разных провайдеров (Stripe, PayPal и т.д.).
+    Used to abstract from specific errors
+    different providers (Stripe, PayPal, etc.).
     """
+
     pass

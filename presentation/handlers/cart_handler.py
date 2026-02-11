@@ -1,6 +1,5 @@
 """
-Обработчики корзины: просмотр, изменение количества, очистка.
-"""
+Cart handlers: view, change quantity, clean."""
 
 import logging
 import telebot
@@ -20,16 +19,16 @@ def register_cart_handlers(
     catalog_repo: CatalogRepository,
 ) -> None:
     """
-    Регистрирует обработчики корзины.
+    Registers cart handlers.
 
     Args:
-        bot: Инстанс бота
-        cart_repo: Репозиторий корзин
-        catalog_repo: Репозиторий каталога
+        bot: Bot instance
+        cart_repo: Recycle Bin Repository
+        catalog_repo: Directory Repository
     """
 
     def _send_cart(chat_id: int, message_id: int = None) -> None:
-        """Внутренний хелпер: отправляет или обновляет сообщение с корзиной."""
+        """Internal helper: Sends or updates a message with the Recycle Bin."""
         cart = cart_repo.get_or_create(chat_id)
         text = format_cart(cart)
         keyboard = get_cart_keyboard(cart)
@@ -57,7 +56,7 @@ def register_cart_handlers(
         )
 
     # ──────────────────────────────────────────────
-    # Просмотр корзины
+    # View Cart
     # ──────────────────────────────────────────────
 
     @bot.message_handler(func=lambda m: m.text == "🛍 Корзина")
@@ -66,7 +65,7 @@ def register_cart_handlers(
         _send_cart(message.chat.id)
 
     # ──────────────────────────────────────────────
-    # Увеличить количество
+    # Increase quantity
     # ──────────────────────────────────────────────
 
     @bot.callback_query_handler(
@@ -90,8 +89,7 @@ def register_cart_handlers(
         current_qty = cart.items[product_id].quantity
         if current_qty >= product.stock:
             bot.answer_callback_query(
-                call.id,
-                f"Максимальное количество: {product.stock} шт."
+                call.id, f"Максимальное количество: {product.stock} шт."
             )
             return
 
@@ -104,7 +102,7 @@ def register_cart_handlers(
             bot.answer_callback_query(call.id, str(e))
 
     # ──────────────────────────────────────────────
-    # Уменьшить количество
+    # Reduce quantity
     # ──────────────────────────────────────────────
 
     @bot.callback_query_handler(
@@ -126,7 +124,7 @@ def register_cart_handlers(
         _send_cart(chat_id, call.message.message_id)
 
     # ──────────────────────────────────────────────
-    # Очистить корзину
+    # Empty Trash
     # ──────────────────────────────────────────────
 
     @bot.callback_query_handler(func=lambda c: c.data == "cart:clear")

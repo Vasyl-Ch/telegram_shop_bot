@@ -1,7 +1,7 @@
 """
-Payment Service — оркестрация платежей.
+Payment Service — payment orchestration.
 
-Координирует OrderService, провайдеры оплаты и уведомления.
+Coordinates OrderService, payment providers, and notifications.
 """
 
 import asyncio
@@ -10,7 +10,6 @@ from typing import Optional
 
 from domain.entities.order import Order
 from domain.enums.payment_method import PaymentMethod
-from domain.enums.order_status import OrderStatus
 from application.services.order_service import OrderService
 from application.services.notification_service import NotificationService
 from infrastructure.payments.stripe_provider import StripeProvider
@@ -24,9 +23,9 @@ logger = logging.getLogger(__name__)
 
 class PaymentService:
     """
-    Сервис обработки платежей.
+    Payment processing service.
 
-    Применение Strategy Pattern через PaymentProvider.
+    Applying the Strategy Pattern through the PaymentProvider.
     """
 
     def __init__(
@@ -38,10 +37,10 @@ class PaymentService:
     ):
         """
         Args:
-            order_service: Сервис заказов
-            notification_service: Сервис уведомлений
-            stripe_provider: Stripe провайдер
-            cash_provider: COD провайдер
+            order_service: Order Service
+            notification_service: Notification Service
+            stripe_provider: Stripe provider
+            cash_provider: COD provider
         """
         self._order_service = order_service
         self._notification = notification_service
@@ -51,17 +50,17 @@ class PaymentService:
 
     def initiate_payment(self, order: Order) -> Optional[str]:
         """
-        Инициирует платёж для заказа.
+        Initiates payment for the order.
 
         Args:
-            order: Заказ с выбранным способом оплаты
+            order: Order with the selected payment method
 
         Returns:
-            Optional[str]: URL для оплаты (Stripe) или None (Cash)
+            Optional[str]: URL for payment (Stripe) or None (Cash)
 
         Raises:
-            PaymentProviderError: При ошибке создания платежа
-            ValueError: Если способ оплаты не выбран
+            PaymentProviderError: On payment creation error
+            ValueError: If the payment method is not selected
         """
         if not order.payment_method:
             raise ValueError("Payment method not set")
@@ -76,7 +75,7 @@ class PaymentService:
         raise ValueError(f"Unknown payment method: {order.payment_method}")
 
     def _initiate_stripe(self, order: Order) -> str:
-        """Создаёт Stripe Checkout Session."""
+        """Creates Stripe Checkout Session."""
         try:
             payment_data = asyncio.run(self._stripe.create_payment(order))
             order.set_stripe_session(payment_data["payment_id"])
@@ -91,23 +90,23 @@ class PaymentService:
             raise
 
     def _initiate_cash(self, order: Order) -> None:
-        """Обрабатывает COD заказ."""
+        """Processes the COD order."""
         asyncio.run(self._cash.create_payment(order))
         logger.info(f"💵 COD payment initiated for order #{order.order_id}")
 
     def check_stripe_payment(self, order: Order) -> PaymentResultDTO:
         """
-        Проверяет статус Stripe платежа.
+        Checks the status of the Stripe payment.
 
-        Теперь возвращает PaymentResultDTO вместо bool —
-        handler получает готовое сообщение и не знает
-        про детали Stripe.
+        Now returns PaymentResultDTO instead of bool —
+        handler receives the finished message and does not know
+        about Stripe details.
 
         Args:
-            order: Заказ
+            order: Order
 
         Returns:
-            PaymentResultDTO: Результат с готовым сообщением
+            PaymentResultDTO: Result with a ready-made message
         """
         if not order.stripe_session_id:
             return PaymentResultDTO(
@@ -137,7 +136,6 @@ class PaymentService:
                     },
                 )
 
-                # ✅ ДОБАВИТЬ: Уведомляем продавца об оплате
                 customer_name = get_customer_name(
                     self._notification._bot,
                     updated_order.chat_id
@@ -185,11 +183,11 @@ class PaymentService:
 
     def handle_payment_success(self, order: Order, session_details: dict) -> None:
         """
-        Callback для PaymentPoller при успешной оплате.
+        Callback for PaymentPoller upon successful payment.
 
         Args:
-            order: Заказ
-            session_details: Детали Stripe сессии
+            order: Order
+            session_details: Stripe Session Details
         """
         try:
             updated = self._order_service.mark_as_paid(
@@ -197,10 +195,8 @@ class PaymentService:
                 {"payment_intent_id": session_details.get("payment_intent_id")}
             )
 
-            # ✅ Уведомляем покупателя
             self._notification.notify_order_status_changed(updated)
 
-            # ✅ ДОБАВИТЬ: Уведомляем продавца об оплате
             customer_name = get_customer_name(
                 self._notification._bot,
                 updated.chat_id
@@ -218,10 +214,10 @@ class PaymentService:
 
     def handle_payment_failed(self, order: Order) -> None:
         """
-        Callback для PaymentPoller при неудачной оплате.
+        Callback for PaymentPoller in case of unsuccessful payment.
 
         Args:
-            order: Заказ
+            order: Order
         """
         try:
             updated = self._order_service.cancel_order(
@@ -234,4 +230,3 @@ class PaymentService:
             )
         except Exception as e:
             logger.error(f"handle_payment_failed error: {e}")
-

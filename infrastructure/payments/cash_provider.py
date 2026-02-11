@@ -1,11 +1,11 @@
 """
-Cash on Delivery (COD) платежный провайдер.
+Cash on Delivery (COD) payment provider.
 
-Особенности:
-- Не создает реальных платежей
+Features:
+- Does not create real payments
 - "Null object" pattern
-- Соответствует интерфейсу PaymentProvider
-- Платеж подтверждается менеджером вручную
+- Conforms to the PaymentProvider interface
+- Payment is confirmed manually by the manager
 """
 
 from typing import Dict, Any, Optional
@@ -21,78 +21,76 @@ class CashProvider(PaymentProvider):
     """
     Cash on Delivery provider.
 
-    Особенности:
-    - Не создает внешних платежей
-    - Платеж считается "pending" до подтверждения менеджером
-    - Не требует webhook или polling
-    - Подтверждение через Telegram кнопки менеджера
+Features:
+    - Does not create external payments
+    - Payment is considered "pending" until confirmed by the manager
+    - Does not require webhook or polling
+    - Confirmation of the manager's button via Telegram
     """
 
     async def create_payment(self, order: Order) -> Dict[str, Any]:
         """
-        "Создает" COD платеж (фактически просто логирует).
+        "Creates" a COD payment (in fact, just logs).
 
         Args:
-            order: Заказ
+            order: Order
 
         Returns:
-            Dict с минимальными данными (нет payment_url)
+            Dict with minimal data (no payment_url)
         """
         logger.info(
             f"💵 COD payment initiated for order #{order.order_id}, "
-            f"amount: {order.total_amount}₽"
+            f"amount: {order.total_amount}₴"
         )
 
-        # Генерируем уникальный ID для "платежа"
         payment_id = f"cash_{order.order_id}_{int(order.created_at.timestamp())}"
 
         return {
-            'payment_url': None,  # Нет URL — оплата при получении
-            'payment_id': payment_id,
-            'status': 'pending_confirmation',  # Ожидает подтверждения менеджера
-            'metadata': {
-                'method': 'cash_on_delivery',
-                'requires_manager_confirmation': True,
-                'amount': float(order.total_amount),
+            "payment_url": None,
+            "payment_id": payment_id,
+            "status": "pending_confirmation",
+            "metadata": {
+                "method": "cash_on_delivery",
+                "requires_manager_confirmation": True,
+                "amount": float(order.total_amount),
             },
         }
 
     async def verify_payment(self, payment_id: str) -> bool:
         """
-        COD платежи не могут быть верифицированы автоматически.
+        COD payments cannot be verified automatically.
 
-        Требуется ручное подтверждение менеджера при доставке.
+        Manual confirmation of the manager is required upon delivery.
 
         Args:
-            payment_id: ID "платежа"
+            payment_id: "payment" ID
 
         Returns:
-            bool: Всегда False (нужно ручное подтверждение)
+            bool: Always False (manual confirmation needed)
         """
         logger.debug(f"💵 COD payment verification requested for {payment_id}")
         return False
 
     async def get_payment_details(self, payment_id: str) -> Optional[Dict[str, Any]]:
         """
-        Возвращает минимальную информацию о COD платеже.
+        Returns the minimum COD payment information.
 
         Args:
-            payment_id: ID "платежа"
+            payment_id: "payment" ID
 
         Returns:
-            Optional[Dict]: Детали
+            Optional[Dict]: Details
         """
-        # Парсим payment_id для получения информации
-        # Формат: cash_<order_id>_<timestamp>
+
         try:
-            parts = payment_id.split('_')
-            if len(parts) >= 3 and parts[0] == 'cash':
+            parts = payment_id.split("_")
+            if len(parts) >= 3 and parts[0] == "cash":
                 return {
-                    'payment_id': payment_id,
-                    'method': 'cash_on_delivery',
-                    'status': 'pending_confirmation',
-                    'order_id': int(parts[1]),
-                    'created': int(parts[2]),
+                    "payment_id": payment_id,
+                    "method": "cash_on_delivery",
+                    "status": "pending_confirmation",
+                    "order_id": int(parts[1]),
+                    "created": int(parts[2]),
                 }
         except Exception as e:
             logger.error(f"Error parsing COD payment_id {payment_id}: {e}")
@@ -101,18 +99,18 @@ class CashProvider(PaymentProvider):
 
     async def cancel_payment(self, payment_id: str) -> bool:
         """
-        Отмена COD — просто логирование.
+        Canceling COD is just logging.
 
         Args:
-            payment_id: ID "платежа"
+            payment_id: "payment" ID
 
         Returns:
-            bool: Всегда True (нет внешнего платежа для отмены)
+            bool: Always True (no external payment to cancel)
         """
         logger.info(f"❌ COD payment cancelled: {payment_id}")
         return True
 
     @property
     def provider_name(self) -> str:
-        """Название провайдера."""
+        """Provider name."""
         return "Cash on Delivery"

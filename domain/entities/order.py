@@ -1,11 +1,11 @@
 """
-Order entity (заказ).
+Order entity.
 
-Применение DDD и SOLID:
-- Order - это Aggregate Root (управляет жизненным циклом заказа)
-- Инкапсулирует бизнес-логику переходов между статусами
-- Single Responsibility: только логика заказа
-- Immutable где возможно, mutable где необходимо (статус, metadata)
+Applications of DDD and SOLID:
+- Order is the Aggregate Root (manages the order lifecycle)
+- Encapsulates the business logic of transitions between statuses
+- Single Responsibility: Order logic only
+- Immutable where possible, mutable where necessary (status, metadata)
 """
 
 from dataclasses import dataclass, field
@@ -23,96 +23,65 @@ logger = logging.getLogger(__name__)
 @dataclass
 class OrderItem:
     """
-    Товар в заказе (Value Object).
+    The product in the order (Value Object).
 
-    Snapshot товара на момент оформления заказа.
+    Snapshot of the product at the time of checkout.
     """
 
     product_id: int
-    """ID товара."""
-
     name: str
-    """Название товара."""
-
     quantity: int
-    """Количество."""
-
     price: Decimal
-    """Цена за единицу на момент заказа."""
 
     @property
     def total(self) -> Decimal:
-        """Стоимость позиции."""
+        """Position value."""
         return self.price * self.quantity
 
     def to_dict(self) -> dict:
-        """Преобразование в словарь."""
+        """Conversion to a dictionary."""
         return {
-            'product_id': self.product_id,
-            'name': self.name,
-            'quantity': self.quantity,
-            'price': float(self.price),
-            'total': float(self.total),
+            "product_id": self.product_id,
+            "name": self.name,
+            "quantity": self.quantity,
+            "price": float(self.price),
+            "total": float(self.total),
         }
 
 
 @dataclass
 class Order:
     """
-    Агрегат заказа (Aggregate Root).
+    Aggregate Root.
 
-    Инвариант: заказ всегда в валидном состоянии.
-    Управляет переходами между статусами согласно бизнес-правилам.
+    Invariant: the order is always in a valid state.
+    Manages transitions between statuses according to business rules.
     """
 
     order_id: int
-    """Уникальный ID заказа."""
-
     chat_id: int
-    """ID пользователя в Telegram."""
-
     items: List[OrderItem]
-    """Товары в заказе."""
-
     phone: str
-    """Телефон покупателя."""
-
     address: str
-    """Адрес доставки."""
-
     status: OrderStatus
-    """Текущий статус заказа."""
-
     payment_method: Optional[PaymentMethod] = None
-    """Способ оплаты (выбирается после создания заказа)."""
 
-    # Stripe-специфичные поля
     stripe_session_id: Optional[str] = None
     """ID Stripe Checkout Session."""
 
     stripe_payment_intent_id: Optional[str] = None
     """ID Stripe Payment Intent."""
 
-    # Метаданные
     created_at: datetime = field(default_factory=datetime.now)
-    """Время создания заказа."""
-
     updated_at: datetime = field(default_factory=datetime.now)
-    """Время последнего обновления."""
 
-    # UI sync (для обновления сообщений в Telegram)
     seller_message_id: Optional[int] = None
-    """ID сообщения в чате менеджера."""
-
     customer_message_id: Optional[int] = None
-    """ID сообщения в чате покупателя."""
 
-    # Заметки менеджера
     notes: Optional[str] = None
-    """Дополнительные заметки."""
 
     def __post_init__(self):
-        """Валидация после инициализации."""
+        """Validation after initialization."""
         if not self.items:
             raise ValueError("Order must contain at least one item")
 
@@ -125,61 +94,59 @@ class Order:
     @property
     def total_amount(self) -> Decimal:
         """
-        Общая сумма заказа.
+        The total amount of the order.
 
         Returns:
-            Decimal: Сумма всех позиций
+            Decimal: Sum of all positions
         """
         return sum(item.total for item in self.items)
 
     @property
     def total_amount_cents(self) -> int:
         """
-        Сумма в копейках/центах (для Stripe API).
+        Amount in kopecks/cents (for Stripe API).
 
         Returns:
-            int: Сумма в минимальных единицах валюты
+            int: Amount in minimum currency units
         """
         return int(self.total_amount * 100)
 
     @property
     def items_count(self) -> int:
         """
-        Общее количество товаров.
+        Total number of products.
 
         Returns:
-            int: Количество единиц
+            int: Number of units
         """
         return sum(item.quantity for item in self.items)
 
-    def update_status(self, new_status: OrderStatus, notes: Optional[str] = None) -> None:
+    def update_status(
+        self, new_status: OrderStatus, notes: Optional[str] = None
+    ) -> None:
         """
-        Обновляет статус заказа с валидацией переходов.
+        Updates the status of the order with the validation of transitions.
 
-        Применение State Machine pattern:
-        - Проверяет допустимость перехода
-        - Логирует изменения
-        - Обновляет timestamp
+        Application of State Machine pattern:
+        - Checks the admissibility of the transition
+        - Logs changes
+        - Updates the timestamp
 
         Args:
-            new_status: Новый статус
-            notes: Опциональные заметки о причине изменения
+            new_status: New Status
+            notes: Optional notes about the reason for the change
 
         Raises:
-            ValueError: Если переход недопустим (в strict режиме)
+            ValueError: If the transition is invalid (in strict mode)
         """
         if new_status == self.status:
-            # Переход в тот же статус - игнорируем
             return
 
-        # Проверяем допустимость перехода
         if not self.status.can_transition_to(new_status):
             logger.warning(
                 f"⚠️ Invalid status transition for order #{self.order_id}: "
                 f"{self.status.value} → {new_status.value}"
             )
-            # В production можно сделать строже (raise ValueError)
-            # Пока только логируем warning
 
         old_status = self.status
         self.status = new_status
@@ -195,90 +162,84 @@ class Order:
 
     def set_payment_method(self, method: PaymentMethod) -> None:
         """
-        Устанавливает способ оплаты.
+        Sets the payment method.
 
         Args:
-            method: Способ оплаты
+            method: Payment method
         """
         self.payment_method = method
         self.updated_at = datetime.now()
 
-        # Автоматически обновляем статус в зависимости от метода
         if method == PaymentMethod.STRIPE:
             self.update_status(OrderStatus.PENDING_PAYMENT)
         elif method == PaymentMethod.CASH:
             self.update_status(OrderStatus.CONFIRMED)
 
-        logger.info(
-            f"💳 Order #{self.order_id} payment method set: {method.value}"
-        )
+        logger.info(f"💳 Order #{self.order_id} payment method set: {method.value}")
 
     def set_stripe_session(self, session_id: str) -> None:
         """
-        Сохраняет ID Stripe Checkout Session.
+        Saves the ID of the Stripe Checkout Session.
 
         Args:
-            session_id: ID сессии
+            session_id: Session ID
         """
         self.stripe_session_id = session_id
         self.updated_at = datetime.now()
 
     def set_stripe_payment_intent(self, payment_intent_id: str) -> None:
         """
-        Сохраняет ID Stripe Payment Intent.
+        Saves the ID of the Stripe Payment Intent.
 
         Args:
-            payment_intent_id: ID payment intent
+            payment_intent_id: ID Payment Intent
         """
         self.stripe_payment_intent_id = payment_intent_id
         self.updated_at = datetime.now()
 
     def is_paid(self) -> bool:
         """
-        Проверяет, оплачен ли заказ.
+        Checks whether the order has been paid for.
 
         Returns:
-            bool: True если оплачен
+            bool: True if paid
         """
         return self.status.is_paid
 
     def is_final(self) -> bool:
         """
-        Проверяет, в финальном ли статусе заказ.
+        Checks if the order is in the final status.
 
         Returns:
-            bool: True если заказ завершен
+            bool: True if the order is completed
         """
         return self.status.is_final
 
     def requires_online_payment(self) -> bool:
         """
-        Требуется ли онлайн-оплата.
+        Is online payment required?
 
         Returns:
-            bool: True если нужен payment gateway
+            bool: True if payment gateway is needed
         """
         return (
-                self.payment_method is not None and
-                self.payment_method.requires_online_payment
+            self.payment_method is not None
+            and self.payment_method.requires_online_payment
         )
 
     def get_summary(self) -> str:
         """
-        Краткая сводка заказа для отображения.
+        A brief summary of the order to display.
 
         Returns:
-            str: Текстовое описание заказа
+            str: Text description of the order
         """
         items_text = "\n".join(
-            f"• {item.name} ×{item.quantity} — {item.total}₽"
-            for item in self.items
+            f"• {item.name} ×{item.quantity} — {item.total}₴" for item in self.items
         )
 
         payment_info = (
-            self.payment_method.display_name
-            if self.payment_method
-            else "Не выбран"
+            self.payment_method.display_name if self.payment_method else "Не выбран"
         )
 
         return (
@@ -286,7 +247,7 @@ class Order:
             f"Статус: {self.status.display_name}\n"
             f"Способ оплаты: {payment_info}\n\n"
             f"Товары:\n{items_text}\n\n"
-            f"💰 Итого: {self.total_amount}₽\n"
+            f"💰 Итого: {self.total_amount}₴\n"
             f"📱 Телефон: {self.phone}\n"
             f"🏠 Адрес: {self.address}\n"
             f"📅 Создан: {self.created_at.strftime('%d.%m.%Y %H:%M')}"
@@ -294,23 +255,25 @@ class Order:
 
     def to_dict(self) -> dict:
         """
-        Преобразует заказ в словарь (для сериализации).
+        Converts the order to a dictionary (for serialization).
 
         Returns:
-            dict: Данные заказа
+            dict: Order Data
         """
         return {
-            'order_id': self.order_id,
-            'chat_id': self.chat_id,
-            'items': [item.to_dict() for item in self.items],
-            'phone': self.phone,
-            'address': self.address,
-            'status': self.status.value,
-            'payment_method': self.payment_method.value if self.payment_method else None,
-            'stripe_session_id': self.stripe_session_id,
-            'stripe_payment_intent_id': self.stripe_payment_intent_id,
-            'total_amount': float(self.total_amount),
-            'created_at': self.created_at.isoformat(),
-            'updated_at': self.updated_at.isoformat(),
-            'notes': self.notes,
+            "order_id": self.order_id,
+            "chat_id": self.chat_id,
+            "items": [item.to_dict() for item in self.items],
+            "phone": self.phone,
+            "address": self.address,
+            "status": self.status.value,
+            "payment_method": (
+                self.payment_method.value if self.payment_method else None
+            ),
+            "stripe_session_id": self.stripe_session_id,
+            "stripe_payment_intent_id": self.stripe_payment_intent_id,
+            "total_amount": float(self.total_amount),
+            "created_at": self.created_at.isoformat(),
+            "updated_at": self.updated_at.isoformat(),
+            "notes": self.notes,
         }

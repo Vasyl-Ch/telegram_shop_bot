@@ -1,6 +1,5 @@
 """
-Middleware для логирования действий пользователей.
-"""
+Middleware for logging user actions."""
 
 import logging
 import telebot
@@ -11,20 +10,20 @@ logger = logging.getLogger(__name__)
 
 class LoggingMiddleware(telebot.BaseMiddleware):
     """
-    Middleware для логирования входящих сообщений и callback'ов.
+    Middleware for logging incoming messages and callbacks.
 
-    Применение Single Responsibility:
-    - Только логирование
-    - Не вмешивается в бизнес-логику
+    Application of Single Responsibility:
+    - Logging only
+    - Does not interfere with business logic
     """
 
     def __init__(self):
-        """Инициализация middleware."""
+        """Middleware initialization."""
         self.update_types = ["message", "callback_query"]
         super().__init__()
 
     def pre_process(self, message, data):
-        """Логирует входящее сообщение/callback до обработки."""
+        """Logs the incoming message/callback before processing."""
         if isinstance(message, types.Message):
             logger.info(
                 f"📨 MSG | user={message.from_user.id} "
@@ -39,9 +38,6 @@ class LoggingMiddleware(telebot.BaseMiddleware):
             )
 
     def post_process(self, message, data, exception):
-        """Логирует исключения после обработки."""
+        """Logs exceptions after processing."""
         if exception:
-            logger.error(
-                f"❌ Handler exception: {exception}",
-                exc_info=True
-            )
+            logger.error(f"❌ Handler exception: {exception}", exc_info=True)

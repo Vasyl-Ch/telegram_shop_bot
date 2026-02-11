@@ -1,6 +1,5 @@
 """
-InlineKeyboard клавиатуры для сообщений.
-"""
+InlineKeyboard keyboard for messages."""
 
 from telebot import types
 from typing import List
@@ -13,10 +12,10 @@ from domain.enums.payment_method import PaymentMethod
 
 def get_categories_keyboard(categories: List[str]) -> types.InlineKeyboardMarkup:
     """
-    Список категорий.
+    List of categories.
 
     Args:
-        categories: Список названий категорий
+        categories: List of category names
 
     Returns:
         InlineKeyboardMarkup
@@ -25,23 +24,21 @@ def get_categories_keyboard(categories: List[str]) -> types.InlineKeyboardMarkup
     for category in categories:
         markup.add(
             types.InlineKeyboardButton(
-                text=f"📂 {category}",
-                callback_data=f"cat:{category}"
+                text=f"📂 {category}", callback_data=f"cat:{category}"
             )
         )
     return markup
 
 
 def get_products_keyboard(
-    products: List[Product],
-    category: str
+    products: List[Product], category: str
 ) -> types.InlineKeyboardMarkup:
     """
-    Список товаров в категории.
+    List of products in the category.
 
     Args:
-        products: Список товаров
-        category: Название категории (для кнопки "Назад")
+        products: List of products
+        category: Category name (for the "Back" button)
 
     Returns:
         InlineKeyboardMarkup
@@ -50,36 +47,32 @@ def get_products_keyboard(
 
     for product in products:
         stock_label = (
-            f"({product.stock} шт.)"
-            if product.is_available
-            else "(нет в наличии)"
+            f"({product.stock} шт.)" if product.is_available else "(нет в наличии)"
         )
         markup.add(
             types.InlineKeyboardButton(
-                text=f"{product.name} — {product.price}₽ {stock_label}",
-                callback_data=f"prod:{product.product_id}"
+                text=f"{product.name} — {product.price}₴ {stock_label}",
+                callback_data=f"prod:{product.product_id}",
             )
         )
 
     markup.add(
         types.InlineKeyboardButton(
-            text="⬅️ Назад к категориям",
-            callback_data="back:categories"
+            text="⬅️ Назад к категориям", callback_data="back:categories"
         )
     )
     return markup
 
 
 def get_product_detail_keyboard(
-    product: Product,
-    from_category: str
+    product: Product, from_category: str
 ) -> types.InlineKeyboardMarkup:
     """
-    Детальная карточка товара с кнопкой добавления в корзину.
+    Detailed product card with an add to cart button.
 
     Args:
-        product: Товар
-        from_category: Категория (для кнопки "Назад")
+        product: Commodity
+        from_category: Category (for Back button)
 
     Returns:
         InlineKeyboardMarkup
@@ -89,22 +82,17 @@ def get_product_detail_keyboard(
     if product.is_available:
         markup.add(
             types.InlineKeyboardButton(
-                text="➕ Добавить в корзину",
-                callback_data=f"add:{product.product_id}"
+                text="➕ Добавить в корзину", callback_data=f"add:{product.product_id}"
             )
         )
     else:
         markup.add(
-            types.InlineKeyboardButton(
-                text="❌ Нет в наличии",
-                callback_data="noop"
-            )
+            types.InlineKeyboardButton(text="❌ Нет в наличии", callback_data="noop")
         )
 
     markup.add(
         types.InlineKeyboardButton(
-            text=f"⬅️ Назад к категории",
-            callback_data=f"cat:{from_category}"
+            text=f"⬅️ Назад к категории", callback_data=f"cat:{from_category}"
         )
     )
     return markup
@@ -112,10 +100,10 @@ def get_product_detail_keyboard(
 
 def get_cart_keyboard(cart: Cart) -> types.InlineKeyboardMarkup:
     """
-    Клавиатура управления корзиной.
+    Recycle bin control keypad.
 
     Args:
-        cart: Корзина покупателя
+        cart: Shopping cart
 
     Returns:
         InlineKeyboardMarkup
@@ -125,27 +113,23 @@ def get_cart_keyboard(cart: Cart) -> types.InlineKeyboardMarkup:
     for item in cart.get_items_list():
         markup.row(
             types.InlineKeyboardButton(
-                text=f"➖ {item.name}",
-                callback_data=f"cart_dec:{item.product_id}"
+                text=f"➖ {item.name}", callback_data=f"cart_dec:{item.product_id}"
             ),
             types.InlineKeyboardButton(
-                text=f"➕ {item.name}",
-                callback_data=f"cart_inc:{item.product_id}"
+                text=f"➕ {item.name}", callback_data=f"cart_inc:{item.product_id}"
             ),
         )
 
     if not cart.is_empty():
         markup.add(
             types.InlineKeyboardButton(
-                text="🚚 Оформить заказ",
-                callback_data="checkout:start"
+                text="🚚 Оформить заказ", callback_data="checkout:start"
             )
         )
 
     markup.add(
         types.InlineKeyboardButton(
-            text="🗑 Очистить корзину",
-            callback_data="cart:clear"
+            text="🗑 Очистить корзину", callback_data="cart:clear"
         )
     )
     return markup
@@ -153,7 +137,7 @@ def get_cart_keyboard(cart: Cart) -> types.InlineKeyboardMarkup:
 
 def get_payment_method_keyboard() -> types.InlineKeyboardMarkup:
     """
-    Выбор способа оплаты.
+    Choosing a payment method.
 
     Returns:
         InlineKeyboardMarkup
@@ -163,66 +147,55 @@ def get_payment_method_keyboard() -> types.InlineKeyboardMarkup:
     for method in PaymentMethod:
         markup.add(
             types.InlineKeyboardButton(
-                text=method.display_name,
-                callback_data=f"pay_method:{method.value}"
+                text=method.display_name, callback_data=f"pay_method:{method.value}"
             )
         )
 
     markup.add(
         types.InlineKeyboardButton(
-            text="❌ Отменить заказ",
-            callback_data="checkout:cancel"
+            text="❌ Отменить заказ", callback_data="checkout:cancel"
         )
     )
     return markup
 
 
 def get_stripe_payment_keyboard(
-    payment_url: str,
-    order_id: int
+    payment_url: str, order_id: int
 ) -> types.InlineKeyboardMarkup:
     """
-    Кнопка для перехода к Stripe оплате.
+    Button to go to Stripe payment.
 
     Args:
         payment_url: URL Stripe Checkout Session
-        order_id: ID заказа
+        order_id: Order ID
 
     Returns:
         InlineKeyboardMarkup
     """
     markup = types.InlineKeyboardMarkup(row_width=1)
+    markup.add(types.InlineKeyboardButton(text="💳 Оплатить картой", url=payment_url))
     markup.add(
         types.InlineKeyboardButton(
-            text="💳 Оплатить картой",
-            url=payment_url
+            text="🔄 Проверить оплату", callback_data=f"check_payment:{order_id}"
         )
     )
     markup.add(
         types.InlineKeyboardButton(
-            text="🔄 Проверить оплату",
-            callback_data=f"check_payment:{order_id}"
-        )
-    )
-    markup.add(
-        types.InlineKeyboardButton(
-            text="❌ Отменить заказ",
-            callback_data=f"cancel_order:{order_id}"
+            text="❌ Отменить заказ", callback_data=f"cancel_order:{order_id}"
         )
     )
     return markup
 
 
 def get_seller_order_keyboard(
-    order: Order,
-    stage: str = "new"
+    order: Order, stage: str = "new"
 ) -> types.InlineKeyboardMarkup:
     """
-    Клавиатура управления заказом для продавца.
+    Order management keypad for the seller.
 
     Args:
-        order: Заказ
-        stage: Стадия заказа ("new", "confirmed")
+        order: Order
+        stage: Order stage ("new", "confirmed")
 
     Returns:
         InlineKeyboardMarkup
@@ -233,39 +206,33 @@ def get_seller_order_keyboard(
     if stage == "new":
         markup.row(
             types.InlineKeyboardButton(
-                text="✅ Подтвердить",
-                callback_data=f"seller_confirm:{oid}"
+                text="✅ Подтвердить", callback_data=f"seller_confirm:{oid}"
             ),
             types.InlineKeyboardButton(
-                text="❌ Отменить",
-                callback_data=f"seller_cancel:{oid}"
+                text="❌ Отменить", callback_data=f"seller_cancel:{oid}"
             ),
         )
     elif stage == "confirmed":
         markup.add(
             types.InlineKeyboardButton(
-                text="🚚 Доставлен",
-                callback_data=f"seller_deliver:{oid}"
+                text="🚚 Доставлен", callback_data=f"seller_deliver:{oid}"
             )
         )
         markup.add(
             types.InlineKeyboardButton(
-                text="❌ Отменить",
-                callback_data=f"seller_cancel:{oid}"
+                text="❌ Отменить", callback_data=f"seller_cancel:{oid}"
             )
         )
 
     return markup
 
 
-def get_order_list_keyboard(
-    orders: List[Order]
-) -> types.InlineKeyboardMarkup:
+def get_order_list_keyboard(orders: List[Order]) -> types.InlineKeyboardMarkup:
     """
-    Список заказов пользователя.
+    A list of the user's orders.
 
     Args:
-        orders: Список заказов
+        orders: List of orders
 
     Returns:
         InlineKeyboardMarkup
@@ -278,9 +245,9 @@ def get_order_list_keyboard(
                 text=(
                     f"#{order.order_id} | "
                     f"{order.status.display_name} | "
-                    f"{order.total_amount}₽"
+                    f"{order.total_amount}₴"
                 ),
-                callback_data=f"order_detail:{order.order_id}"
+                callback_data=f"order_detail:{order.order_id}",
             )
         )
 

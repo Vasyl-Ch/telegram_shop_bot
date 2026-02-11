@@ -1,15 +1,14 @@
 """
-Order Service - оркестрация бизнес-логики заказов.
+Order Service - orchestration of the business logic of orders.
 
-Применение SOLID:
-- Single Responsibility: только логика заказов
-- Dependency Injection: все зависимости через конструктор
-- Interface Segregation: использует только нужные методы репозиториев
+Applications of SOLID:
+- Single Responsibility: Order logic only
+- Dependency Injection: all dependencies through the constructor
+- Interface Segregation: Uses only the necessary repository methods
 """
 
 import logging
 from typing import List, Optional
-from decimal import Decimal
 
 from domain.entities.order import Order, OrderItem
 from domain.entities.cart import Cart
@@ -28,51 +27,45 @@ logger = logging.getLogger(__name__)
 
 class OrderService:
     """
-    Сервис для управления заказами.
+    Order management service.
 
-    Orchestration layer - координирует работу между
-    репозиториями и доменными объектами.
+    Orchestration layer - coordinates work between
+    repositories and domain objects.
     """
 
     def __init__(
-            self,
-            order_repository: OrderRepository,
-            catalog_repository: CatalogRepository,
+        self,
+        order_repository: OrderRepository,
+        catalog_repository: CatalogRepository,
     ):
         """
         Args:
-            order_repository: Репозиторий заказов
-            catalog_repository: Репозиторий каталога
+            order_repository: Order Repository
+            catalog_repository: Directory Repository
         """
         self.order_repo = order_repository
         self.catalog_repo = catalog_repository
 
         logger.info("✅ OrderService initialized")
 
-    def create_order_from_cart(
-            self,
-            cart: Cart,
-            phone: str,
-            address: str
-    ) -> Order:
+    def create_order_from_cart(self, cart: Cart, phone: str, address: str) -> Order:
         """
-        Создает заказ из корзины.
+        Creates an order from the cart.
 
         Args:
-            cart: Корзина покупателя
-            phone: Телефон
-            address: Адрес доставки
+            cart: Shopping cart
+            phone: Phone
+            address: Delivery address
 
         Returns:
-            Order: Созданный заказ
+            Order: Created order
 
         Raises:
-            ValueError: Если корзина пуста или данные невалидны
+            ValueError: If the cart is empty or the data is invalid
         """
         if cart.is_empty():
             raise ValueError("Cannot create order from empty cart")
 
-        # Валидируем остатки
         errors = cart.validate_against_stock(
             lambda product_id: self.catalog_repo.get_stock(product_id)
         )
@@ -80,7 +73,6 @@ class OrderService:
         if errors:
             raise ValueError(f"Stock validation failed: {'; '.join(errors)}")
 
-        # Создаем OrderItem'ы из CartItem'ов
         order_items = []
         for cart_item in cart.get_items_list():
             order_items.append(
@@ -92,9 +84,8 @@ class OrderService:
                 )
             )
 
-        # Создаем заказ
         order = Order(
-            order_id=0,  # Будет присвоен в репозитории
+            order_id=0,
             chat_id=cart.chat_id,
             items=order_items,
             phone=phone,
@@ -102,7 +93,6 @@ class OrderService:
             status=OrderStatus.PENDING_PAYMENT_METHOD,
         )
 
-        # Сохраняем
         saved_order = self.order_repo.save(order)
 
         logger.info(
@@ -112,20 +102,16 @@ class OrderService:
 
         return saved_order
 
-    def set_payment_method(
-            self,
-            order_id: int,
-            payment_method: PaymentMethod
-    ) -> Order:
+    def set_payment_method(self, order_id: int, payment_method: PaymentMethod) -> Order:
         """
-        Устанавливает способ оплаты для заказа.
+        Sets the payment method for the order.
 
         Args:
-            order_id: ID заказа
-            payment_method: Способ оплаты
+            order_id: Order ID
+            payment_method: Payment Method
 
         Returns:
-            Order: Обновленный заказ
+            Order: Updated order
         """
         order = self.order_repo.get_by_id(order_id)
         if not order:
@@ -135,30 +121,28 @@ class OrderService:
         updated_order = self.order_repo.update(order)
 
         logger.info(
-            f"💳 Payment method set for order #{order_id}: "
-            f"{payment_method.value}"
+            f"💳 Payment method set for order #{order_id}: " f"{payment_method.value}"
         )
 
         return updated_order
 
     def mark_as_paid(self, order_id: int, payment_details: dict) -> Order:
         """
-        Отмечает заказ как оплаченный.
+        Marks the order as paid.
 
         Args:
-            order_id: ID заказа
-            payment_details: Детали платежа
+            order_id: Order ID
+            payment_details: Payment Details
 
         Returns:
-            Order: Обновленный заказ
+            Order: Updated order
         """
         order = self.order_repo.get_by_id(order_id)
         if not order:
             raise ValueError(f"Order #{order_id} not found")
 
-        # Сохраняем Payment Intent ID если есть
-        if 'payment_intent_id' in payment_details:
-            order.set_stripe_payment_intent(payment_details['payment_intent_id'])
+        if "payment_intent_id" in payment_details:
+            order.set_stripe_payment_intent(payment_details["payment_intent_id"])
 
         order.update_status(OrderStatus.PAID)
         updated_order = self.order_repo.update(order)
@@ -169,13 +153,13 @@ class OrderService:
 
     def confirm_order(self, order_id: int) -> Order:
         """
-        Подтверждает заказ (менеджером).
+        Confirms the order (by the manager).
 
         Args:
-            order_id: ID заказа
+            order_id: Order ID
 
         Returns:
-            Order: Обновленный заказ
+            Order: Updated order
         """
         order = self.order_repo.get_by_id(order_id)
         if not order:
@@ -190,24 +174,20 @@ class OrderService:
 
     def mark_as_delivered(self, order_id: int) -> Order:
         """
-        Отмечает заказ как доставленный и списывает товары.
+        Marks the order as delivered and writes off the goods.
 
         Args:
-            order_id: ID заказа
+            order_id: Order ID
 
         Returns:
-            Order: Обновленный заказ
+            Order: Updated order
         """
         order = self.order_repo.get_by_id(order_id)
         if not order:
             raise ValueError(f"Order #{order_id} not found")
 
-        # Списываем товары со склада
         for item in order.items:
-            success = self.catalog_repo.reduce_stock(
-                item.product_id,
-                item.quantity
-            )
+            success = self.catalog_repo.reduce_stock(item.product_id, item.quantity)
             if not success:
                 logger.warning(
                     f"⚠️ Failed to reduce stock for product {item.product_id}"
@@ -222,14 +202,14 @@ class OrderService:
 
     def cancel_order(self, order_id: int, reason: str = None) -> Order:
         """
-        Отменяет заказ.
+        Cancels the order.
 
         Args:
-            order_id: ID заказа
-            reason: Причина отмены (опционально)
+            order_id: Order ID
+            reason: Reason for cancellation (optional)
 
         Returns:
-            Order: Обновленный заказ
+            Order: Updated order
         """
         order = self.order_repo.get_by_id(order_id)
         if not order:
@@ -244,46 +224,45 @@ class OrderService:
 
     def get_user_orders(self, chat_id: int) -> List[Order]:
         """
-        Получает все заказы пользователя.
+        Receives all the user's orders.
 
         Args:
-            chat_id: ID пользователя
+            chat_id: User ID
 
         Returns:
-            List[Order]: Список заказов
+            List[Order]: List of orders
         """
         return self.order_repo.get_by_chat_id(chat_id)
 
     def get_pending_stripe_orders(self) -> List[Order]:
         """
-        Получает заказы, ожидающие оплату через Stripe.
+        Receives orders waiting to be paid via Stripe.
 
         Returns:
-            List[Order]: Pending Stripe заказы
+            List[Order]: Pending Stripe Orders
         """
         return self.order_repo.get_by_status_and_payment_method(
-            OrderStatus.PENDING_PAYMENT,
-            PaymentMethod.STRIPE
+            OrderStatus.PENDING_PAYMENT, PaymentMethod.STRIPE
         )
 
     def create_order_from_dto(
-            self,
-            cart: Cart,
-            dto: OrderCreateDTO,
+        self,
+        cart: Cart,
+        dto: OrderCreateDTO,
     ) -> OrderResponseDTO:
         """
-        Создаёт заказ из DTO и возвращает ResponseDTO.
+        Creates an order from the DTO and returns the ResponseDTO.
 
-        Обёртка над create_order_from_cart для работы с DTO.
-        Используется в checkout_handler вместо прямого вызова
+        Wrapper over the create_order_from_cart for working with DTO.
+        Used in checkout_handler instead of a direct call
         create_order_from_cart(cart, phone, address).
 
         Args:
-            cart: Корзина покупателя
-            dto: Данные формы оформления
+            cart: Shopping cart
+            dto: Form data
 
         Returns:
-            OrderResponseDTO: Для передачи в Presentation layer
+            OrderResponseDTO: To pass to the Presentation layer
         """
         order = self.create_order_from_cart(
             cart=cart,
@@ -293,17 +272,17 @@ class OrderService:
         return OrderResponseDTO.from_order(order)
 
     def get_order_response_dto(
-            self,
-            order_id: int,
+        self,
+        order_id: int,
     ) -> Optional[OrderResponseDTO]:
         """
-        Возвращает заказ в виде DTO.
+        Returns the order as a DTO.
 
-        Используется когда handler хочет получить данные
-        заказа без прямого доступа к доменному Order.
+        Used when handler wants to retrieve data
+        order without direct access to the domain Order.
 
         Args:
-            order_id: ID заказа
+            order_id: Order ID
 
         Returns:
             Optional[OrderResponseDTO]
@@ -314,19 +293,19 @@ class OrderService:
         return OrderResponseDTO.from_order(order)
 
     def get_user_orders_summary(
-            self,
-            chat_id: int,
+        self,
+        chat_id: int,
     ) -> List[OrderSummaryDTO]:
         """
-        Возвращает краткий список заказов пользователя.
+        Returns a short list of the user's orders.
 
-        Используется в разделе "📦 Мои заказы".
+        Used in the My 📦 Orders section.
 
         Args:
-            chat_id: ID пользователя
+            chat_id: User ID
 
         Returns:
-            List[OrderSummaryDTO]: Последние заказы
+            List[OrderSummaryDTO]: Recent Orders
         """
         orders = self.order_repo.get_by_chat_id(chat_id)
         return [

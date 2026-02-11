@@ -2,4 +2,4 @@
 
 from .google_sheets_client import GoogleSheetsClient
 
-__all__ = ['GoogleSheetsClient']
+__all__ = ["GoogleSheetsClient"]

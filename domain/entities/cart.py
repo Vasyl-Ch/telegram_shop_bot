@@ -1,10 +1,10 @@
 """
-Cart entity (корзина покупок).
+Cart entity.
 
-Применение DDD:
-- Cart - это Aggregate Root (управляет CartItem'ами)
-- Инкапсулирует логику добавления/удаления товаров
-- Валидирует бизнес-правила
+Applications of DDD:
+- Cart is Aggregate Root (manages CartItems)
+- Encapsulates the logic of adding/removing products
+- Validates business rules
 """
 
 from dataclasses import dataclass, field
@@ -15,28 +15,19 @@ from typing import Dict, List, Optional
 @dataclass
 class CartItem:
     """
-    Товар в корзине.
+    The product is in the cart.
 
-    Value Object - идентифицируется по product_id.
+    Value Object - identified by product_id.
     """
 
     product_id: int
-    """ID товара."""
-
     name: str
-    """Название товара (кеш для отображения)."""
-
     price: Decimal
-    """Цена за единицу."""
-
     quantity: int
-    """Количество в корзине."""
-
     max_available: int
-    """Максимально доступное количество на складе."""
 
     def __post_init__(self):
-        """Валидация."""
+        """Validation."""
         if self.quantity <= 0:
             raise ValueError("Quantity must be positive")
         if self.quantity > self.max_available:
@@ -47,22 +38,22 @@ class CartItem:
 
     @property
     def total(self) -> Decimal:
-        """Стоимость позиции."""
+        """Position value."""
         return self.price * self.quantity
 
     def can_increase(self) -> bool:
-        """Можно ли увеличить количество."""
+        """Is it possible to increase the number."""
         return self.quantity < self.max_available
 
-    def increase(self) -> 'CartItem':
+    def increase(self) -> "CartItem":
         """
-        Увеличивает количество на 1.
+        Increases the quantity by 1.
 
         Returns:
-            CartItem: Новый экземпляр с увеличенным количеством
+            CartItem: New instance with increased quantity
 
         Raises:
-            ValueError: Если достигнут максимум
+            ValueError: If the maximum is reached
         """
         if not self.can_increase():
             raise ValueError("Maximum available quantity reached")
@@ -75,13 +66,13 @@ class CartItem:
             max_available=self.max_available,
         )
 
-    def decrease(self) -> Optional['CartItem']:
+    def decrease(self) -> Optional["CartItem"]:
         """
-        Уменьшает количество на 1.
+        Decreases the amount by 1.
 
         Returns:
-            CartItem: Новый экземпляр с уменьшенным количеством,
-                      или None если количество станет 0
+            CartItem: A new instance with a reduced quantity,
+                      or None if the count becomes 0
         """
         if self.quantity <= 1:
             return None
@@ -98,44 +89,39 @@ class CartItem:
 @dataclass
 class Cart:
     """
-    Корзина покупок (Aggregate Root).
+    Shopping cart (Aggregate Root).
 
-    Управляет коллекцией CartItem и обеспечивает
-    согласованность данных.
+    Manages the CartItem collection and provides
+    data consistency.
     """
 
     chat_id: int
-    """ID пользователя-владельца корзины."""
-
     items: Dict[int, CartItem] = field(default_factory=dict)
-    """Товары в корзине (key: product_id, value: CartItem)."""
 
     def add_item(self, cart_item: CartItem) -> None:
         """
-        Добавляет товар в корзину или увеличивает количество.
+        Adds an item to the cart or increases the quantity.
 
         Args:
-            cart_item: Товар для добавления
+            cart_item: Product to add
 
         Raises:
-            ValueError: Если превышено доступное количество
+            ValueError: If the available quantity is exceeded
         """
         product_id = cart_item.product_id
 
         if product_id in self.items:
-            # Товар уже в корзине - увеличиваем количество
             existing = self.items[product_id]
             self.items[product_id] = existing.increase()
         else:
-            # Новый товар
             self.items[product_id] = cart_item
 
     def remove_item(self, product_id: int) -> None:
         """
-        Уменьшает количество товара или удаляет из корзины.
+        Reduces the quantity of the product or removes it from the cart.
 
         Args:
-            product_id: ID товара
+            product_id: Product ID
         """
         if product_id not in self.items:
             return
@@ -148,58 +134,58 @@ class Cart:
 
     def delete_item(self, product_id: int) -> None:
         """
-        Полностью удаляет товар из корзины.
+        Completely removes the product from the cart.
 
         Args:
-            product_id: ID товара
+            product_id: Product ID
         """
         self.items.pop(product_id, None)
 
     def clear(self) -> None:
-        """Очищает корзину."""
+        """Empties the trash."""
         self.items.clear()
 
     def is_empty(self) -> bool:
-        """Проверяет, пуста ли корзина."""
+        """Checks if the cart is empty."""
         return len(self.items) == 0
 
     def get_total(self) -> Decimal:
         """
-        Вычисляет общую стоимость корзины.
+        Calculates the total cost of the cart.
 
         Returns:
-            Decimal: Общая сумма
+            Decimal: Total amount
         """
         return sum(item.total for item in self.items.values())
 
     def get_items_count(self) -> int:
         """
-        Подсчитывает общее количество товаров.
+        Counts the total number of products.
 
         Returns:
-            int: Количество единиц товара
+            int: Number of units of the product
         """
         return sum(item.quantity for item in self.items.values())
 
     def get_items_list(self) -> List[CartItem]:
         """
-        Возвращает список товаров в корзине.
+        Returns a list of items in the cart.
 
         Returns:
-            List[CartItem]: Список товаров
+            List[CartItem]: List of products
         """
         return list(self.items.values())
 
     def validate_against_stock(self, stock_checker) -> List[str]:
         """
-        Проверяет, все ли товары доступны в нужном количестве.
+        Checks if all products are available in the right quantity.
 
         Args:
-            stock_checker: Функция для проверки остатков
+            stock_checker: Function for checking balances
                           (product_id: int) -> int (available stock)
 
         Returns:
-            List[str]: Список ошибок (пустой если все ОК)
+            List[str]: List of errors (empty if everything is OK)
         """
         errors = []
 
@@ -207,9 +193,7 @@ class Cart:
             available = stock_checker(product_id)
 
             if available == 0:
-                errors.append(
-                    f"❌ {cart_item.name} - нет в наличии"
-                )
+                errors.append(f"❌ {cart_item.name} - нет в наличии")
             elif available < cart_item.quantity:
                 errors.append(
                     f"⚠️ {cart_item.name} - доступно только {available} шт. "

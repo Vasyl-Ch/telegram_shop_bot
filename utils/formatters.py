@@ -1,13 +1,11 @@
 """
-Форматирование сообщений для Telegram.
+Formatting messages for Telegram.
 
-Централизованные функции для единообразного отображения данных.
-Принцип Single Responsibility: только форматирование.
+Centralized functions for a consistent display of data.
+Single Responsibility: Formatting only.
 """
 
 from decimal import Decimal
-from datetime import datetime
-from typing import List, Optional
 
 from domain.entities.order import Order
 from domain.entities.cart import Cart
@@ -16,26 +14,26 @@ from domain.entities.product import Product
 
 def format_price(amount: Decimal) -> str:
     """
-    Форматирует цену для отображения.
+    Formats the price to display.
 
     Args:
-        amount: Сумма
+        amount: Amount
 
     Returns:
-        str: Отформатированная цена (например "1 250.00₽")
+        str: Formatted price (e.g. "1 250.00₴")
     """
-    return f"{amount:,.2f}₽".replace(",", " ")
+    return f"{amount:,.2f}₴".replace(",", " ")
 
 
 def format_product_card(product: Product) -> str:
     """
-    Формирует карточку товара.
+    Generates a product card.
 
     Args:
-        product: Товар
+        product: Commodity
 
     Returns:
-        str: Текст карточки товара для Telegram
+        str: Text of the product card for Telegram
     """
     return (
         f"🏷 <b>{product.name}</b>\n"
@@ -47,13 +45,13 @@ def format_product_card(product: Product) -> str:
 
 def format_cart(cart: Cart) -> str:
     """
-    Формирует сообщение с содержимым корзины.
+    Generates a message with the contents of the cart.
 
     Args:
-        cart: Корзина покупателя
+        cart: Shopping cart
 
     Returns:
-        str: Текст корзины для Telegram
+        str: Cart Text for Telegram
     """
     if cart.is_empty():
         return "🛍 Ваша корзина пуста."
@@ -62,9 +60,7 @@ def format_cart(cart: Cart) -> str:
 
     for item in cart.get_items_list():
         lines.append(
-            f"• {item.name} "
-            f"×{item.quantity} — "
-            f"{format_price(item.total)}"
+            f"• {item.name} " f"×{item.quantity} — " f"{format_price(item.total)}"
         )
 
     lines.append(f"\n💰 <b>Итого: {format_price(cart.get_total())}</b>")
@@ -75,13 +71,13 @@ def format_cart(cart: Cart) -> str:
 
 def format_order_for_customer(order: Order) -> str:
     """
-    Формирует сообщение о заказе для покупателя.
+    Generates an order message for the buyer.
 
     Args:
-        order: Заказ
+        order: Order
 
     Returns:
-        str: Текст заказа для отправки покупателю
+        str: Order text to be sent to the customer
     """
     lines = [
         f"📦 <b>Заказ #{order.order_id}</b>\n",
@@ -93,30 +89,30 @@ def format_order_for_customer(order: Order) -> str:
 
     lines.append("\n<b>Товары:</b>")
     for item in order.items:
-        lines.append(
-            f"• {item.name} ×{item.quantity} — {format_price(item.total)}"
-        )
+        lines.append(f"• {item.name} ×{item.quantity} — {format_price(item.total)}")
 
-    lines.extend([
-        f"\n💰 <b>Итого: {format_price(order.total_amount)}</b>",
-        f"📱 Телефон: {order.phone}",
-        f"🏠 Адрес: {order.address}",
-        f"📅 Создан: {order.created_at.strftime('%d.%m.%Y %H:%M')}",
-    ])
+    lines.extend(
+        [
+            f"\n💰 <b>Итого: {format_price(order.total_amount)}</b>",
+            f"📱 Телефон: {order.phone}",
+            f"🏠 Адрес: {order.address}",
+            f"📅 Создан: {order.created_at.strftime('%d.%m.%Y %H:%M')}",
+        ]
+    )
 
     return "\n".join(lines)
 
 
 def format_order_for_seller(order: Order, customer_name: str) -> str:
     """
-    Формирует уведомление о заказе для продавца.
+    Generates an order notification for the seller.
 
     Args:
-        order: Заказ
-        customer_name: Имя покупателя
+        order: Order
+        customer_name: Buyer's Name
 
     Returns:
-        str: Текст уведомления для продавца
+        str: Notification text for the seller
     """
     lines = [
         f"🔔 <b>НОВЫЙ ЗАКАЗ #{order.order_id}!</b>\n",
@@ -127,35 +123,33 @@ def format_order_for_seller(order: Order, customer_name: str) -> str:
     ]
 
     for item in order.items:
-        lines.append(
-            f"• {item.name} ×{item.quantity} — {format_price(item.total)}"
-        )
+        lines.append(f"• {item.name} ×{item.quantity} — {format_price(item.total)}")
 
     payment_info = (
-        order.payment_method.display_name
-        if order.payment_method
-        else "не выбран"
+        order.payment_method.display_name if order.payment_method else "не выбран"
     )
 
-    lines.extend([
-        f"\n💳 Способ оплаты: {payment_info}",
-        f"💰 <b>Общая сумма: {format_price(order.total_amount)}</b>",
-        f"📊 Статус: {order.status.display_name}",
-    ])
+    lines.extend(
+        [
+            f"\n💳 Способ оплаты: {payment_info}",
+            f"💰 <b>Общая сумма: {format_price(order.total_amount)}</b>",
+            f"📊 Статус: {order.status.display_name}",
+        ]
+    )
 
     return "\n".join(lines)
 
 
 def format_payment_link(payment_url: str, order_id: int) -> str:
     """
-    Формирует сообщение со ссылкой на оплату.
+    Generates a message with a link to payment.
 
     Args:
-        payment_url: URL страницы оплаты Stripe
-        order_id: ID заказа
+        payment_url: Stripe payment page URL
+        order_id: Order ID
 
     Returns:
-        str: Сообщение для пользователя
+        str: Message to the user
     """
     return (
         f"💳 <b>Оплата заказа #{order_id}</b>\n\n"
@@ -168,13 +162,13 @@ def format_payment_link(payment_url: str, order_id: int) -> str:
 
 def format_order_status_update(order: Order) -> str:
     """
-    Формирует сообщение об изменении статуса заказа.
+    Generates a message about changes in the status of the order.
 
     Args:
-        order: Заказ с обновленным статусом
+        order: Order with updated status
 
     Returns:
-        str: Текст уведомления об изменении статуса
+        str: Status Change Notification Text
     """
     status_messages = {
         "paid": (
@@ -201,6 +195,5 @@ def format_order_status_update(order: Order) -> str:
 
     return status_messages.get(
         order.status.value,
-        f"🔄 Статус заказа #{order.order_id} обновлён: "
-        f"{order.status.display_name}"
+        f"🔄 Статус заказа #{order.order_id} обновлён: " f"{order.status.display_name}",
     )

@@ -1,6 +1,5 @@
 """
-Обработчик команды /start и главного меню.
-"""
+Handler for the /start command and the main menu."""
 
 import logging
 import telebot
@@ -13,15 +12,15 @@ logger = logging.getLogger(__name__)
 
 def register_start_handlers(bot: telebot.TeleBot) -> None:
     """
-    Регистрирует обработчики команды /start.
+    Registers handlers for the /start command.
 
     Args:
-        bot: Инстанс Telegram бота
+        bot: Telegram bot instance
     """
 
     @bot.message_handler(commands=["start"])
     def handle_start(message: types.Message) -> None:
-        """Обработчик команды /start."""
+        """The /start command handler."""
         param = None
         if message.text and " " in message.text:
             param = message.text.split(" ", 1)[1]
@@ -50,7 +49,7 @@ def register_start_handlers(bot: telebot.TeleBot) -> None:
 
     @bot.message_handler(commands=["help"])
     def handle_help(message: types.Message) -> None:
-        """Обработчик команды /help."""
+        """The /help command handler."""
         help_text = (
             "🛒 <b>Добро пожаловать в магазин!</b>\n\n"
             "Доступные команды:\n"
@@ -72,11 +71,11 @@ def register_start_handlers(bot: telebot.TeleBot) -> None:
 
 def _send_welcome(bot: telebot.TeleBot, chat_id: int) -> None:
     """
-    Отправляет приветственное сообщение.
+    Sends a welcome message.
 
     Args:
-        bot: Инстанс бота
-        chat_id: ID чата
+        bot: Bot instance
+        chat_id: Chat ID
     """
     welcome_text = (
         "🛒 <b>Добро пожаловать в наш магазин!</b>\n\n"
@@ -88,10 +87,12 @@ def _send_welcome(bot: telebot.TeleBot, chat_id: int) -> None:
         parse_mode="HTML",
         reply_markup=get_main_menu_keyboard(),
     )
-    bot.set_my_commands([
-        types.BotCommand("start", "Главное меню"),
-        types.BotCommand("help", "Помощь"),
-        types.BotCommand("catalog", "Каталог товаров"),
-        types.BotCommand("cart", "Корзина"),
-        types.BotCommand("orders", "Мои заказы"),
-    ])
+    bot.set_my_commands(
+        [
+            types.BotCommand("start", "Главное меню"),
+            types.BotCommand("help", "Помощь"),
+            types.BotCommand("catalog", "Каталог товаров"),
+            types.BotCommand("cart", "Корзина"),
+            types.BotCommand("orders", "Мои заказы"),
+        ]
+    )

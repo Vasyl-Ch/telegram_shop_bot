@@ -1,7 +1,7 @@
 """
-Обработчики панели продавца.
+Seller panel handlers.
 
-Доступ только для SELLER_CHAT_ID.
+Access is only for SELLER_CHAT_ID.
 """
 
 import logging
@@ -31,22 +31,22 @@ def register_seller_handlers(
     catalog_repo: CatalogRepository,
 ) -> None:
     """
-    Регистрирует обработчики панели продавца.
+    Registers seller panel handlers.
 
     Args:
-        bot: Инстанс бота
-        order_service: Сервис заказов
-        order_repo: Репозиторий заказов
-        seller_chat_id: ID чата продавца
-        catalog_repo: Репозиторий каталога
+        bot: Bot instance
+        order_service: Order Service
+        order_repo: Order Repository
+        seller_chat_id: Merchant Chat ID
+        catalog_repo: Directory Repository
     """
 
     def is_seller(chat_id: int) -> bool:
-        """Проверяет, является ли пользователь продавцом."""
+        """Verifies that the user is a seller."""
         return str(chat_id) == str(seller_chat_id)
 
     # ──────────────────────────────────────────────
-    # Команда /seller
+    # command /seller
     # ──────────────────────────────────────────────
 
     @bot.message_handler(commands=["seller"])
@@ -63,7 +63,7 @@ def register_seller_handlers(
         )
 
     # ──────────────────────────────────────────────
-    # Активные заказы
+    # Active Orders
     # ──────────────────────────────────────────────
 
     @bot.message_handler(func=lambda m: m.text == "📋 Активные заказы")
@@ -92,7 +92,7 @@ def register_seller_handlers(
             )
 
     # ──────────────────────────────────────────────
-    # Выполненные заказы
+    # Completed orders
     # ──────────────────────────────────────────────
 
     @bot.message_handler(func=lambda m: m.text == "✅ Выполненные")
@@ -109,7 +109,7 @@ def register_seller_handlers(
         for order in delivered[-10:]:
             lines.append(
                 f"#{order.order_id} | "
-                f"{order.total_amount}₽ | "
+                f"{order.total_amount}₴ | "
                 f"{order.created_at.strftime('%d.%m %H:%M')}"
             )
 
@@ -120,7 +120,7 @@ def register_seller_handlers(
         )
 
     # ──────────────────────────────────────────────
-    # Статистика
+    # Statistics
     # ──────────────────────────────────────────────
 
     @bot.message_handler(func=lambda m: m.text == "📊 Статистика")
@@ -145,13 +145,13 @@ def register_seller_handlers(
             f"✅ Выполнено: {delivered}\n"
             f"❌ Отменено: {cancelled}\n"
             f"⏳ В обработке: {pending}\n\n"
-            f"💰 Выручка: {total_revenue:.2f}₽"
+            f"💰 Выручка: {total_revenue:.2f}₴"
         )
 
         bot.send_message(message.chat.id, text, parse_mode="HTML")
 
     # ──────────────────────────────────────────────
-    # Мало на складе
+    # Little in stock
     # ──────────────────────────────────────────────
 
     @bot.message_handler(func=lambda m: m.text == "⚠️ Мало на складе")
@@ -175,7 +175,7 @@ def register_seller_handlers(
         )
 
     # ──────────────────────────────────────────────
-    # Обновление каталога продавцом
+    # Updating the catalog by the seller
     # ──────────────────────────────────────────────
 
     @bot.message_handler(func=lambda m: m.text == "🔄 Обновить каталог")
@@ -190,7 +190,7 @@ def register_seller_handlers(
             bot.send_message(message.chat.id, f"❌ Ошибка: {e}")
 
     # ──────────────────────────────────────────────
-    # Подтверждение заказа
+    # Order confirmation
     # ──────────────────────────────────────────────
 
     @bot.callback_query_handler(
@@ -207,7 +207,6 @@ def register_seller_handlers(
             order = order_service.confirm_order(order_id)
             customer_name = get_customer_name(bot, order.chat_id)
 
-            # Обновляем сообщение продавца
             bot.edit_message_text(
                 text=format_order_for_seller(order, customer_name),
                 chat_id=call.message.chat.id,
@@ -218,7 +217,6 @@ def register_seller_handlers(
 
             bot.answer_callback_query(call.id, "✅ Заказ подтверждён!")
 
-            # Уведомляем покупателя
             bot.send_message(
                 order.chat_id,
                 format_order_status_update(order),
@@ -230,7 +228,7 @@ def register_seller_handlers(
             bot.answer_callback_query(call.id, "❌ Ошибка подтверждения.")
 
     # ──────────────────────────────────────────────
-    # Доставлен
+    # Delivered
     # ──────────────────────────────────────────────
 
     @bot.callback_query_handler(
@@ -247,7 +245,6 @@ def register_seller_handlers(
             order = order_service.mark_as_delivered(order_id)
             customer_name = get_customer_name(bot, order.chat_id)
 
-            # Убираем кнопки с сообщения продавца
             bot.edit_message_text(
                 text=(
                     f"🚚 <b>ЗАКАЗ #{order_id} ДОСТАВЛЕН</b>\n\n"
@@ -261,7 +258,6 @@ def register_seller_handlers(
 
             bot.answer_callback_query(call.id, "🚚 Заказ доставлен! Товары списаны.")
 
-            # Уведомляем покупателя
             bot.send_message(
                 order.chat_id,
                 format_order_status_update(order),
@@ -273,7 +269,7 @@ def register_seller_handlers(
             bot.answer_callback_query(call.id, "❌ Ошибка.")
 
     # ──────────────────────────────────────────────
-    # Отмена заказа продавцом
+    # Cancellation by the seller
     # ──────────────────────────────────────────────
 
     @bot.callback_query_handler(

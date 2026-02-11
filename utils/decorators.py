@@ -1,9 +1,9 @@
 """
-Декораторы для обработки ошибок и повторных попыток.
+Decorators for error handling and retry.
 
-Применение:
-- error_handler: для Telegram callback/message handlers
-- retry: для нестабильных внешних вызовов (Google Sheets, Stripe)
+Application:
+- error_handler: for Telegram callback/message handlers
+- retry: for unstable external calls (Google Sheets, Stripe)
 """
 
 import logging
@@ -14,50 +14,47 @@ from typing import Callable, Type, Tuple, Optional
 logger = logging.getLogger(__name__)
 
 
-def error_handler(bot=None, default_message: str = "Произошла ошибка. Попробуйте позже."):
+def error_handler(
+    bot=None, default_message: str = "Произошла ошибка. Попробуйте позже."
+):
     """
-    Декоратор для безопасной обработки ошибок в Telegram handlers.
+    Decorator for safe error handling in Telegram handlers.
 
-    Перехватывает все исключения, логирует их и отправляет
-    пользователю дружелюбное сообщение об ошибке.
+    Catches all exceptions, logs them, and sends them
+    user-friendly error message.
 
     Args:
-        bot: Инстанс telebot.TeleBot (для отправки сообщений)
-        default_message: Сообщение об ошибке для пользователя
+        bot: Telebot instance. TeleBot (for sending messages)
+        default_message: Error message to the user
 
     Usage:
         @error_handler(bot=bot)
         def handle_start(message):
             ...
 
-        @error_handler(bot=bot)
+    @error_handler(bot=bot)
         def handle_callback(call):
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             try:
                 return func(*args, **kwargs)
             except Exception as e:
-                logger.error(
-                    f"❌ Error in {func.__name__}: {e}",
-                    exc_info=True
-                )
+                logger.error(f"❌ Error in {func.__name__}: {e}", exc_info=True)
 
-                # Пробуем определить chat_id из аргументов
                 chat_id = _extract_chat_id(args)
 
-                # Отправляем сообщение об ошибке если есть bot и chat_id
                 if bot and chat_id:
                     try:
                         bot.send_message(chat_id, default_message)
                     except Exception as send_error:
-                        logger.error(
-                            f"❌ Failed to send error message: {send_error}"
-                        )
+                        logger.error(f"❌ Failed to send error message: {send_error}")
 
         return wrapper
+
     return decorator
 
 
@@ -68,21 +65,22 @@ def retry(
     exceptions: Tuple[Type[Exception], ...] = (Exception,),
 ):
     """
-    Декоратор для повторных попыток при ошибках.
+    Decorator for retries in case of errors.
 
-    Применяет экспоненциальный backoff между попытками.
+    Applies exponential backoff between attempts.
 
     Args:
-        max_attempts: Максимальное количество попыток
-        delay: Начальная задержка между попытками (секунды)
-        backoff: Множитель для увеличения задержки
-        exceptions: Кортеж исключений для перехвата
+        max_attempts: Maximum number of attempts
+        delay: Initial delay between attempts (seconds)
+        backoff: Multiplier to increase latency
+        exceptions: Tuple of exceptions to catch
 
     Usage:
         @retry(max_attempts=3, delay=1.0, exceptions=(ConnectionError,))
         def call_external_api():
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -101,38 +99,33 @@ def retry(
                     )
 
                     if attempt < max_attempts:
-                        logger.info(
-                            f"⏳ Retrying in {current_delay:.1f}s..."
-                        )
+                        logger.info(f"⏳ Retrying in {current_delay:.1f}s...")
                         time.sleep(current_delay)
                         current_delay *= backoff
 
-            logger.error(
-                f"❌ {func.__name__} failed after {max_attempts} attempts"
-            )
+            logger.error(f"❌ {func.__name__} failed after {max_attempts} attempts")
             raise last_exception
 
         return wrapper
+
     return decorator
 
 
 def _extract_chat_id(args: tuple) -> Optional[int]:
     """
-    Извлекает chat_id из аргументов handler'а.
+    Extracts chat_id from handler arguments.
 
-    Поддерживает Message и CallbackQuery объекты telebot.
+    Supports Message and CallbackQuery telebot objects.
 
     Args:
-        args: Аргументы функции
+        args: Function Arguments
 
     Returns:
-        Optional[int]: chat_id если удалось определить
+        Optional[int]: chat_id if the
     """
     for arg in args:
-        # telebot.types.Message
         if hasattr(arg, "chat") and hasattr(arg.chat, "id"):
             return arg.chat.id
-        # telebot.types.CallbackQuery
         if hasattr(arg, "message") and hasattr(arg.message, "chat"):
             return arg.message.chat.id
 

@@ -1,14 +1,14 @@
 """
-Enum для способов оплаты.
+Enum for payment methods.
 
-Применение SOLID:
-- Single Responsibility: только определение способов оплаты
-- Open/Closed: легко добавить новые методы без изменения кода
+Applications of SOLID:
+- Single Responsibility: Only defining payment methods
+- Open/Closed: Easily add new methods without changing the code
 
-Почему Enum:
-- Предотвращает опечатки в строках
-- Автокомплит в IDE
-- Централизованное управление способами оплаты
+Why Enum:
+- Prevents typos in strings
+- Autocomplete in the IDE
+- Centralized management of payment methods
 - Type safety
 """
 
@@ -17,18 +17,18 @@ from enum import Enum
 
 class PaymentMethod(str, Enum):
     """
-    Способы оплаты в системе.
+    Payment methods in the system.
 
-    Наследуется от str для совместимости с JSON/DB сериализацией.
+    Inherits from str for compatibility with JSON/DB serialization.
     """
 
     STRIPE = "stripe"
-    """Онлайн-оплата через Stripe (картой)."""
+    """Online payment via Stripe (by card)."""
 
     CASH = "cash"
-    """Оплата наличными курьеру при получении."""
+    """Payment in cash to the courier upon receipt."""
 
-    # Готово к расширению:
+    # Ready to Expand:
     # PAYPAL = "paypal"
     # BANK_TRANSFER = "bank_transfer"
     # CRYPTO = "crypto"
@@ -40,10 +40,10 @@ class PaymentMethod(str, Enum):
     @property
     def display_name(self) -> str:
         """
-        Человекочитаемое название для UI.
+        Human-readable name for UI.
 
         Returns:
-            str: Название с emoji для Telegram
+            str: Name with emoji for Telegram
         """
         names = {
             self.STRIPE: "💳 Онлайн-оплата картой",
@@ -54,20 +54,20 @@ class PaymentMethod(str, Enum):
     @property
     def requires_online_payment(self) -> bool:
         """
-        Требуется ли онлайн-оплата.
+        Is online payment required?
 
         Returns:
-            bool: True если нужен payment gateway
+            bool: True if payment gateway is needed
         """
         return self == PaymentMethod.STRIPE
 
     @property
     def description(self) -> str:
         """
-        Описание способа оплаты для пользователя.
+       A description of the payment method for the user.
 
         Returns:
-            str: Детальное описание
+            str: Detailed Description
         """
         descriptions = {
             self.STRIPE: (

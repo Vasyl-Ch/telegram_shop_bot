@@ -1,9 +1,9 @@
 """
-Enum для статусов заказа.
+Enum for order statuses.
 
-Статусы организованы как конечный автомат (State Machine):
-- Каждый статус имеет определенные допустимые переходы
-- Инвалидные переходы логируются как warning
+Statuses are organized like a State Machine:
+- Each status has certain valid transitions
+- Disabled crossings are logged as a warning
 """
 
 from enum import Enum
@@ -21,6 +21,7 @@ class OrderStatus(str, Enum):
     PENDING_PAYMENT_METHOD → CONFIRMED → DELIVERED
 
     Отмена возможна на любом этапе до DELIVERED.
+
     """
 
     PENDING_PAYMENT_METHOD = "pending_payment_method"
@@ -54,10 +55,10 @@ class OrderStatus(str, Enum):
     @property
     def display_name(self) -> str:
         """
-        Человекочитаемое название для UI.
+        Human-readable name for UI.
 
         Returns:
-            str: Название с emoji
+            str: Title with emoji
         """
         names = {
             self.PENDING_PAYMENT_METHOD: "⏳ Выбор способа оплаты",
@@ -74,10 +75,10 @@ class OrderStatus(str, Enum):
     @property
     def is_final(self) -> bool:
         """
-        Проверка финального статуса.
+        Checking the final status.
 
         Returns:
-            bool: True если заказ в финальном состоянии
+            bool: True if the order is in the final state
         """
         return self in [
             OrderStatus.DELIVERED,
@@ -88,10 +89,10 @@ class OrderStatus(str, Enum):
     @property
     def is_paid(self) -> bool:
         """
-        Проверка оплаты заказа.
+        Checking the payment for the order.
 
         Returns:
-            bool: True если заказ оплачен
+            bool: True if the order is paid
         """
         return self in [
             OrderStatus.PAID,
@@ -102,27 +103,27 @@ class OrderStatus(str, Enum):
     @property
     def requires_manager_action(self) -> bool:
         """
-        Требуется ли действие менеджера.
+        Whether a manager's action is required.
 
         Returns:
-            bool: True если нужно подтверждение менеджера
+            bool: True if need manager confirmation
         """
         return self in [
             OrderStatus.PAID,
             OrderStatus.CONFIRMED,
         ]
 
-    def get_allowed_transitions(self) -> List['OrderStatus']:
+    def get_allowed_transitions(self) -> List["OrderStatus"]:
         """
-        Возвращает список допустимых переходов из текущего статуса.
+        Returns a list of valid transitions from the current status.
 
         Returns:
-            List[OrderStatus]: Допустимые следующие статусы
+            List[OrderStatus]: The following statuses are valid
         """
         transitions = {
             OrderStatus.PENDING_PAYMENT_METHOD: [
-                OrderStatus.PENDING_PAYMENT,  # Выбрал Stripe
-                OrderStatus.CONFIRMED,  # Выбрал наличные
+                OrderStatus.PENDING_PAYMENT,
+                OrderStatus.CONFIRMED,
                 OrderStatus.CANCELLED,
             ],
             OrderStatus.PENDING_PAYMENT: [
@@ -143,24 +144,24 @@ class OrderStatus(str, Enum):
                 OrderStatus.DELIVERED,
                 OrderStatus.CANCELLED,
             ],
-            OrderStatus.DELIVERED: [],  # Финальный статус
-            OrderStatus.CANCELLED: [],  # Финальный статус
+            OrderStatus.DELIVERED: [],
+            OrderStatus.CANCELLED: [],
             OrderStatus.FAILED: [
-                OrderStatus.PENDING_PAYMENT_METHOD,  # Можно переоформить
+                OrderStatus.PENDING_PAYMENT_METHOD,
             ],
         }
         return transitions.get(self, [])
 
-    def can_transition_to(self, new_status: 'OrderStatus') -> bool:
+    def can_transition_to(self, new_status: "OrderStatus") -> bool:
         """
-        Проверяет допустимость перехода в новый статус.
+        Checks the admissibility of the transition to the new status.
 
         Args:
-            new_status: Целевой статус
+            new_status: Target Status
 
         Returns:
-            bool: True если переход допустим
+            bool: True if the transition is valid
         """
         if new_status == self:
-            return True  # Можно "перейти" в тот же статус
+            return True
         return new_status in self.get_allowed_transitions()

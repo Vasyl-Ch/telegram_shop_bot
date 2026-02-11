@@ -1,13 +1,13 @@
 """
-Data Transfer Objects для заказов.
+Data Transfer Objects for orders.
 
-Адаптированы под реальную архитектуру проекта:
+Adapted to the real architecture of the project:
 - OrderCreateDTO: checkout_handler → OrderService
 - PaymentMethodDTO: checkout_handler → OrderService
 - OrderResponseDTO: OrderService → checkout_handler/seller_handler
-- OrderSummaryDTO: OrderService → handlers (список заказов)
+- OrderSummaryDTO: OrderService → handlers
 - PaymentResultDTO: PaymentService → checkout_handler
-- CheckoutStateDTO: замена сырого dict _checkout_state
+- CheckoutStateDTO: Replace raw dict _checkout_state
 """
 
 from dataclasses import dataclass, field
@@ -20,22 +20,22 @@ from domain.entities.order import Order, OrderItem
 from domain.enums.order_status import OrderStatus
 from domain.enums.payment_method import PaymentMethod
 
-
 # ─────────────────────────────────────────────
 # INPUT DTOs (Presentation → Application)
 # ─────────────────────────────────────────────
 
+
 @dataclass
 class OrderCreateDTO:
     """
-    Данные формы оформления заказа.
+    Checkout form data.
 
-    Заменяет три отдельных аргумента в OrderService:
-        было:  create_order_from_cart(cart, phone, address)
-        стало: create_order_from_cart(cart, dto)
+    Replaces three separate arguments in the OrderService:
+        Before: create_order_from_cart(cart, phone, address)
+        After: create_order_from_cart(cart, dto)
 
-    Создаётся в checkout_handler после сбора
-    телефона и адреса от пользователя.
+    Crafted in checkout_handler after harvesting
+    phone number and address from the user.
     """
 
     chat_id: int
@@ -51,11 +51,13 @@ class OrderCreateDTO:
         self.phone = self.phone.strip()
         self.address = self.address.strip()
 
-        phone_pattern = r'^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$'
+        phone_pattern = (
+            r"^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$"
+        )
         if not re.match(phone_pattern, self.phone):
             raise ValueError(
                 f"Некорректный формат телефона: '{self.phone}'. "
-                "Пример: +7 999 123-45-67"
+                "Пример: +380 99 123 45 67"
             )
 
         if not self.address or len(self.address) < 10:
@@ -68,10 +70,10 @@ class OrderCreateDTO:
 @dataclass
 class PaymentMethodDTO:
     """
-    Выбор способа оплаты.
+    Choosing a payment method.
 
-    Создаётся в checkout_handler когда пользователь
-    нажимает кнопку выбора оплаты.
+    Created in checkout_handler when the user
+    clicks the payment selection button.
     """
 
     order_id: int
@@ -87,25 +89,23 @@ class PaymentMethodDTO:
         method_value: str,
     ) -> "PaymentMethodDTO":
         """
-        Создаёт DTO из callback_data Telegram кнопки.
+        Creates a DTO from callback_data Telegram buttons.
 
         Args:
-            order_id: ID заказа
-            method_value: Строковое значение из callback
-                          (например "stripe" или "cash")
+            order_id: Order ID
+            method_value: String value from callback
+                          (e.g. "stripe" or "cash")
 
         Returns:
             PaymentMethodDTO
 
         Raises:
-            ValueError: если method_value неизвестен
+            ValueError: If method_value unknown
         """
         try:
             method = PaymentMethod(method_value)
         except ValueError:
-            raise ValueError(
-                f"Неизвестный способ оплаты: '{method_value}'"
-            )
+            raise ValueError(f"Неизвестный способ оплаты: '{method_value}'")
 
         return cls(order_id=order_id, payment_method=method)
 
@@ -113,14 +113,14 @@ class PaymentMethodDTO:
 @dataclass
 class CheckoutStateDTO:
     """
-    Состояние процесса оформления заказа.
+    The status of the checkout process.
 
-    Заменяет сырой dict _checkout_state в checkout_handler:
-        было:  _checkout_state[chat_id] = {"phone": ..., "address": ...}
-        стало: _checkout_state[chat_id] = CheckoutStateDTO(...)
+    Replaces the raw dict _checkout_state in checkout_handler:
+        was: _checkout_state[chat_id] = {"phone": ..., "address": ...}
+        after: _checkout_state[chat_id] = CheckoutStateDTO(...)
 
-    Хранит промежуточные данные между шагами формы
-    (телефон собирается на шаге 1, адрес на шаге 2).
+    Stores intermediate data between form steps
+    (the phone is collected at step 1, the address at step 2).
     """
 
     chat_id: int
@@ -136,40 +136,38 @@ class CheckoutStateDTO:
     """Время начала оформления (для TTL/истечения)."""
 
     def is_phone_collected(self) -> bool:
-        """Проверяет, введён ли телефон."""
+        """Checks if the phone is entered."""
         return bool(self.phone and len(self.phone) >= 10)
 
     def is_complete(self) -> bool:
-        """Проверяет, собраны ли все данные для создания заказа."""
+        """Checks if all the data has been collected to create the order."""
         return self.is_phone_collected() and len(self.address) >= 10
 
     def is_expired(self, ttl_minutes: int = 30) -> bool:
         """
-        Проверяет, не истекло ли время сессии оформления.
+        Checks if the checkout session has expired.
 
         Args:
-            ttl_minutes: Время жизни в минутах
+            ttl_minutes: Lifetime in minutes
 
         Returns:
-            bool: True если сессия устарела
+            bool: True if the session is out of date
         """
         age = (datetime.now() - self.started_at).total_seconds() / 60
         return age > ttl_minutes
 
     def to_order_create_dto(self) -> OrderCreateDTO:
         """
-        Конвертирует в OrderCreateDTO когда данные собраны.
+        Converts to OrderCreateDTO when the data is collected.
 
         Returns:
-            OrderCreateDTO: Готовый DTO для передачи в OrderService
+            OrderCreateDTO: Ready DTO to be passed to OrderService
 
         Raises:
-            ValueError: Если данные ещё не собраны
+            ValueError: If the data has not yet been collected
         """
         if not self.is_complete():
-            raise ValueError(
-                "Данные оформления ещё не собраны полностью"
-            )
+            raise ValueError("Данные оформления ещё не собраны полностью")
 
         return OrderCreateDTO(
             chat_id=self.chat_id,
@@ -182,12 +180,13 @@ class CheckoutStateDTO:
 # OUTPUT DTOs (Application → Presentation)
 # ─────────────────────────────────────────────
 
+
 @dataclass
 class OrderItemDTO:
     """
-    Позиция заказа для передачи в Presentation layer.
+    Order item to be transferred to the Presentation layer.
 
-    Плоская структура без методов — только данные.
+    A planar structure with no methods—only data.
     """
 
     product_id: int
@@ -199,10 +198,10 @@ class OrderItemDTO:
     @classmethod
     def from_order_item(cls, item: OrderItem) -> "OrderItemDTO":
         """
-        Создаёт DTO из доменного OrderItem.
+        Creates a DTO from the domain's OrderItem.
 
         Args:
-            item: Доменный объект
+            item: Domain Object
 
         Returns:
             OrderItemDTO
@@ -216,7 +215,7 @@ class OrderItemDTO:
         )
 
     def to_dict(self) -> dict:
-        """Сериализация в словарь."""
+        """Serialization to a dictionary."""
         return {
             "product_id": self.product_id,
             "name": self.name,
@@ -229,13 +228,13 @@ class OrderItemDTO:
 @dataclass
 class OrderResponseDTO:
     """
-    Полные данные заказа для Presentation layer.
+    Full order data for the Presentation layer.
 
-    Возвращается из OrderService вместо доменного Order.
-    Handlers работают ТОЛЬКО с этим DTO — не импортируют Order.
+    Returned from OrderService instead of domain Order.
+    Handlers work ONLY with this DTO – do not import the Order.
 
-    Содержит предвычисленные display-поля чтобы
-    formatters не зависели от доменных enums.
+    Contains precomputed display fields to
+    formatters did not depend on domain enums.
     """
 
     order_id: int
@@ -247,25 +246,20 @@ class OrderResponseDTO:
     total_amount: Decimal
     items_count: int
 
-    # Опциональные поля
     payment_method: Optional[PaymentMethod] = None
     payment_url: Optional[str] = None
     stripe_session_id: Optional[str] = None
     seller_message_id: Optional[int] = None
     created_at: datetime = field(default_factory=datetime.now)
 
-    # Предвычисленные display-поля для Presentation layer
-    # (заполняются автоматически в __post_init__)
     status_display: str = field(init=False)
     payment_method_display: str = field(init=False)
 
     def __post_init__(self):
-        """Заполняет display-поля из enum значений."""
+        """Populates display fields from enum values."""
         self.status_display = self.status.display_name
         self.payment_method_display = (
-            self.payment_method.display_name
-            if self.payment_method
-            else "Не выбран"
+            self.payment_method.display_name if self.payment_method else "Не выбран"
         )
 
     @classmethod
@@ -275,14 +269,14 @@ class OrderResponseDTO:
         payment_url: Optional[str] = None,
     ) -> "OrderResponseDTO":
         """
-        Основной фабричный метод: Order → DTO.
+        The main factory method is Order → DTO.
 
-        Используется в OrderService перед возвратом
-        данных в Presentation layer.
+        Used in OrderService before return
+        data in the Presentation layer.
 
         Args:
-            order: Доменный объект заказа
-            payment_url: URL Stripe оплаты (если есть)
+            order: Domain object of the order
+            payment_url: Payment Stripe URL (if any)
 
         Returns:
             OrderResponseDTO
@@ -290,10 +284,7 @@ class OrderResponseDTO:
         return cls(
             order_id=order.order_id,
             chat_id=order.chat_id,
-            items=[
-                OrderItemDTO.from_order_item(item)
-                for item in order.items
-            ],
+            items=[OrderItemDTO.from_order_item(item) for item in order.items],
             phone=order.phone,
             address=order.address,
             status=order.status,
@@ -307,7 +298,7 @@ class OrderResponseDTO:
         )
 
     def to_dict(self) -> dict:
-        """Сериализация (для логов и отладки)."""
+        """Serialization (for logs and debugging)."""
         return {
             "order_id": self.order_id,
             "chat_id": self.chat_id,
@@ -318,9 +309,7 @@ class OrderResponseDTO:
             "status_display": self.status_display,
             "total_amount": float(self.total_amount),
             "payment_method": (
-                self.payment_method.value
-                if self.payment_method
-                else None
+                self.payment_method.value if self.payment_method else None
             ),
             "payment_url": self.payment_url,
             "created_at": self.created_at.isoformat(),
@@ -330,13 +319,13 @@ class OrderResponseDTO:
 @dataclass
 class OrderSummaryDTO:
     """
-    Краткая сводка заказа для списков.
+    A quick summary of the order for the lists.
 
-    Используется в:
-    - "📦 Мои заказы" (история покупателя)
-    - "📋 Активные заказы" (панель продавца)
+    Used in:
+    - "📦 My Orders" (customer story)
+    - "📋 Active orders" (seller panel)
 
-    Легче OrderResponseDTO — без полного списка items.
+    Easier than OrderResponseDTO — without a full list of items.
     """
 
     order_id: int
@@ -346,25 +335,22 @@ class OrderSummaryDTO:
     payment_method: Optional[PaymentMethod]
     created_at: datetime
 
-    # Display поля
     status_display: str = field(init=False)
     payment_method_display: str = field(init=False)
 
     def __post_init__(self):
         self.status_display = self.status.display_name
         self.payment_method_display = (
-            self.payment_method.display_name
-            if self.payment_method
-            else "Не выбран"
+            self.payment_method.display_name if self.payment_method else "Не выбран"
         )
 
     @classmethod
     def from_order(cls, order: Order) -> "OrderSummaryDTO":
         """
-        Создаёт краткую сводку из доменного Order.
+        Creates a summary from the domain Order.
 
         Args:
-            order: Доменный объект
+            order: Domain Object
 
         Returns:
             OrderSummaryDTO
@@ -382,13 +368,13 @@ class OrderSummaryDTO:
 @dataclass
 class PaymentResultDTO:
     """
-    Результат проверки/обработки платежа.
+    The result of verification/processing of the payment.
 
-    Возвращается из PaymentService.check_stripe_payment()
-    в checkout_handler.
+    Returning from PaymentService.check_stripe_payment()
+    in checkout_handler.
 
-    Изолирует handler от деталей Stripe API —
-    handler видит только: оплачено/нет + сообщение.
+    Isolates handler from Stripe API details —
+    Handler only sees: paid/no + message.
     """
 
     order_id: int

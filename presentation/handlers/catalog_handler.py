@@ -1,5 +1,5 @@
 """
-Обработчики каталога: категории, товары, поиск.
+Catalog processors: categories, products, search.
 """
 
 import logging
@@ -15,7 +15,6 @@ from presentation.keyboards.inline_keyboards import (
     get_product_detail_keyboard,
 )
 from utils.formatters import format_product_card
-from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 
@@ -26,16 +25,16 @@ def register_catalog_handlers(
     cart_repo: CartRepository,
 ) -> None:
     """
-    Регистрирует обработчики каталога.
+    Registers directory handlers.
 
     Args:
-        bot: Инстанс бота
-        catalog_repo: Репозиторий каталога
-        cart_repo: Репозиторий корзин
+        bot: Bot instance
+        catalog_repo: Directory Repository
+        cart_repo: Recycle Bin Repository
     """
 
     # ──────────────────────────────────────────────
-    # Категории
+    # Category
     # ──────────────────────────────────────────────
 
     @bot.message_handler(
@@ -105,7 +104,7 @@ def register_catalog_handlers(
         bot.answer_callback_query(call.id)
 
     # ──────────────────────────────────────────────
-    # Весь каталог
+    # Full catalog
     # ──────────────────────────────────────────────
 
     @bot.message_handler(
@@ -126,7 +125,7 @@ def register_catalog_handlers(
         )
 
     # ──────────────────────────────────────────────
-    # Детальная карточка товара
+    # Detailed product card
     # ──────────────────────────────────────────────
 
     @bot.callback_query_handler(
@@ -170,7 +169,7 @@ def register_catalog_handlers(
         bot.answer_callback_query(call.id)
 
     # ──────────────────────────────────────────────
-    # Добавление в корзину
+    # Add to cart
     # ──────────────────────────────────────────────
 
     @bot.callback_query_handler(
@@ -223,7 +222,7 @@ def register_catalog_handlers(
             bot.answer_callback_query(call.id, str(e))
 
     # ──────────────────────────────────────────────
-    # Поиск
+    # Search
     # ──────────────────────────────────────────────
 
     @bot.message_handler(func=lambda m: m.text == "🔍 Поиск")
@@ -259,7 +258,7 @@ def register_catalog_handlers(
         )
 
     # ──────────────────────────────────────────────
-    # Заглушка для "noop" кнопок
+    # Plug for "noop" buttons
     # ──────────────────────────────────────────────
 
     @bot.callback_query_handler(func=lambda c: c.data == "noop")
@@ -267,7 +266,7 @@ def register_catalog_handlers(
         bot.answer_callback_query(call.id, "Товар временно отсутствует")
 
     # ──────────────────────────────────────────────
-    # Обновление каталога
+    # Catalog update
     # ──────────────────────────────────────────────
 
     @bot.message_handler(func=lambda m: m.text == "🔄 Обновить")

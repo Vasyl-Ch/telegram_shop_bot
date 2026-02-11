@@ -1,105 +1,105 @@
 """
-Базовый абстрактный репозиторий.
+Basic abstract repository.
 
-Применение SOLID:
-- Interface Segregation: минимальный набор методов
-- Dependency Inversion: зависимость от абстракции
-- Single Responsibility: только CRUD операции
+Applications of SOLID:
+- Interface Segregation: A minimum set of methods
+- Dependency Inversion: Dependency on Abstraction
+- Single Responsibility: CRUD operations only
 
-Паттерн Repository:
-- Абстрагирует логику хранения данных
-- Легко заменить реализацию (in-memory → DB)
-- Централизует доступ к данным
+Repository pattern:
+- Abstracts data storage logic
+- Easy to replace implementation (in-memory → DB)
+- Centralizes access to data
 """
 
 from abc import ABC, abstractmethod
 from typing import Generic, TypeVar, Optional, List
 
-# Generic тип для entity
-T = TypeVar('T')
+# Generic type for entity
+T = TypeVar("T")
 
 
 class BaseRepository(ABC, Generic[T]):
     """
-    Абстрактный базовый репозиторий.
+    Abstract base repository.
 
-    Generic класс - может работать с любым типом entity.
+    Generic class - can work with any type of entity.
 
     Type Parameters:
-        T: Тип entity (Order, Cart, Product и т.д.)
+        T: Entity type (Order, Cart, Product, etc.)
     """
 
     @abstractmethod
     def save(self, entity: T) -> T:
         """
-        Сохраняет entity.
+        Saves the entity.
 
         Args:
-            entity: Entity для сохранения
+            entity: Entity to save
 
         Returns:
-            T: Сохраненный entity (с обновленными полями если нужно)
+            T: Saved entity (with updated fields if needed)
         """
         pass
 
     @abstractmethod
     def get_by_id(self, entity_id: int) -> Optional[T]:
         """
-        Получает entity по ID.
+        Gets entity by ID.
 
         Args:
-            entity_id: Уникальный идентификатор
+            entity_id: Unique identifier
 
         Returns:
-            Optional[T]: Entity если найден, None иначе
+            Optional[T]: Entity if found, None otherwise
         """
         pass
 
     @abstractmethod
     def get_all(self) -> List[T]:
         """
-        Получает все entity.
+        Gets all entity.
 
         Returns:
-            List[T]: Список всех entity
+            List[T]: List of all entities
         """
         pass
 
     @abstractmethod
     def update(self, entity: T) -> T:
         """
-        Обновляет существующий entity.
+        Updates an existing entity.
 
         Args:
-            entity: Entity с обновленными данными
+            entity: Entity with updated data
 
         Returns:
-            T: Обновленный entity
+            T: Updated entity
         """
         pass
 
     @abstractmethod
     def delete(self, entity_id: int) -> bool:
         """
-        Удаляет entity по ID.
+        Deletes entity by ID.
 
         Args:
-            entity_id: ID entity для удаления
+            entity_id: Entity ID to delete
 
         Returns:
-            bool: True если удален, False если не найден
+            bool: True if removed, False if not found
         """
         pass
 
     @abstractmethod
     def exists(self, entity_id: int) -> bool:
         """
-        Проверяет существование entity.
+        Checks for the existence of an entity.
 
         Args:
             entity_id: ID entity
 
         Returns:
-            bool: True если существует
+            bool: True if exists
         """
         pass

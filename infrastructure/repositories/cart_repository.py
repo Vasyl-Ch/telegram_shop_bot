@@ -1,10 +1,10 @@
 """
-Репозиторий для корзин покупателей.
+Repository for shopping carts.
 
-Реализация:
-- In-memory хранилище
+Implementation:
+- In-memory storage
 - Thread-safe
-- Key: chat_id (ID пользователя)
+- Key: chat_id (User ID)
 """
 
 from typing import Optional
@@ -19,47 +19,47 @@ logger = logging.getLogger(__name__)
 
 class CartRepository(BaseRepository[Cart]):
     """
-    In-memory репозиторий корзин.
+    In-memory repositor.
 
-    Использует chat_id как ключ (у каждого пользователя одна корзина).
+    Uses chat_id as a key (each user has one bucket).
     """
 
     def __init__(self):
-        """Инициализация репозитория."""
+        """Initialize the repository."""
         self._carts: dict[int, Cart] = {}
         self._lock = Lock()
 
         logger.info("✅ CartRepository initialized (in-memory)")
 
     def save(self, entity: Cart) -> Cart:
-        """Сохраняет корзину."""
+        """Saves the trash."""
         with self._lock:
             self._carts[entity.chat_id] = entity
             return entity
 
     def get_by_id(self, entity_id: int) -> Optional[Cart]:
         """
-        Получает корзину по chat_id.
+        Gets a basket for chat_id.
 
         Args:
-            entity_id: chat_id пользователя
+            entity_id: chat_id user
         """
         with self._lock:
             return self._carts.get(entity_id)
 
     def get_all(self) -> list[Cart]:
-        """Возвращает все корзины."""
+        """Returns all carts."""
         with self._lock:
             return list(self._carts.values())
 
     def update(self, entity: Cart) -> Cart:
-        """Обновляет корзину."""
+        """Updates the cart."""
         with self._lock:
             self._carts[entity.chat_id] = entity
             return entity
 
     def delete(self, entity_id: int) -> bool:
-        """Удаляет корзину."""
+        """Deletes the Recycle Bin."""
         with self._lock:
             if entity_id in self._carts:
                 del self._carts[entity_id]
@@ -67,21 +67,19 @@ class CartRepository(BaseRepository[Cart]):
             return False
 
     def exists(self, entity_id: int) -> bool:
-        """Проверяет существование корзины."""
+        """Checks for the existence of the Recycle Bin."""
         with self._lock:
             return entity_id in self._carts
 
-    # Специфичные методы для Cart
-
     def get_or_create(self, chat_id: int) -> Cart:
         """
-        Получает корзину или создает новую если не существует.
+        Retrieves the cart or creates a new one if it doesn't exist.
 
         Args:
-            chat_id: ID пользователя
+            chat_id: User ID
 
         Returns:
-            Cart: Существующая или новая корзина
+            Cart: Existing or new cart
         """
         with self._lock:
             if chat_id not in self._carts:
@@ -92,10 +90,10 @@ class CartRepository(BaseRepository[Cart]):
 
     def clear_cart(self, chat_id: int) -> None:
         """
-        Очищает корзину пользователя.
+        Empties the user's Recycle Bin.
 
         Args:
-            chat_id: ID пользователя
+            chat_id: User ID
         """
         with self._lock:
             if chat_id in self._carts:

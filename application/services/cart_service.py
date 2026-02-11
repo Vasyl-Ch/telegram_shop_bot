@@ -1,12 +1,9 @@
 """
-Cart Service — управление корзиной покупателя.
-"""
+Cart Service — shopping cart management."""
 
 import logging
-from decimal import Decimal
 
 from domain.entities.cart import Cart, CartItem
-from domain.entities.product import Product
 from infrastructure.repositories.cart_repository import CartRepository
 from infrastructure.repositories.catalog_repository import CatalogRepository
 
@@ -15,10 +12,10 @@ logger = logging.getLogger(__name__)
 
 class CartService:
     """
-    Сервис управления корзиной.
+    Cart management service.
 
-    Оркестрирует взаимодействие между Cart, CartRepository
-    и CatalogRepository.
+    Orchestrates interoperability between Cart, CartRepository
+    and CatalogRepository.
     """
 
     def __init__(
@@ -28,8 +25,8 @@ class CartService:
     ):
         """
         Args:
-            cart_repo: Репозиторий корзин
-            catalog_repo: Репозиторий каталога
+            cart_repo: Recycle Bin Repository
+            catalog_repo: Directory Repository
         """
         self._cart_repo = cart_repo
         self._catalog_repo = catalog_repo
@@ -37,29 +34,29 @@ class CartService:
 
     def get_or_create_cart(self, chat_id: int) -> Cart:
         """
-        Получает или создаёт корзину пользователя.
+        Retrieves or creates a user's cart.
 
         Args:
-            chat_id: ID пользователя
+            chat_id: User ID
 
         Returns:
-            Cart: Корзина пользователя
+            Cart: User cart
         """
         return self._cart_repo.get_or_create(chat_id)
 
     def add_product(self, chat_id: int, product_id: int) -> Cart:
         """
-        Добавляет товар в корзину.
+        Adds the product to the cart.
 
         Args:
-            chat_id: ID пользователя
-            product_id: ID товара
+            chat_id: User ID
+            product_id: Product ID
 
         Returns:
-            Cart: Обновлённая корзина
+            Cart: Updated cart
 
         Raises:
-            ValueError: Если товар не найден или нет в наличии
+            ValueError: If the product is not found or out of stock
         """
         product = self._catalog_repo.get_by_id(product_id)
         if not product:
@@ -69,16 +66,10 @@ class CartService:
             raise ValueError(f"Product '{product.name}' is out of stock")
 
         cart = self._cart_repo.get_or_create(chat_id)
-        current_qty = (
-            cart.items[product_id].quantity
-            if product_id in cart.items
-            else 0
-        )
+        current_qty = cart.items[product_id].quantity if product_id in cart.items else 0
 
         if current_qty >= product.stock:
-            raise ValueError(
-                f"Cannot add more. Max available: {product.stock}"
-            )
+            raise ValueError(f"Cannot add more. Max available: {product.stock}")
 
         cart_item = CartItem(
             product_id=product.product_id,
@@ -95,14 +86,14 @@ class CartService:
 
     def remove_product(self, chat_id: int, product_id: int) -> Cart:
         """
-        Уменьшает количество товара в корзине.
+        Reduces the number of items in the cart.
 
         Args:
-            chat_id: ID пользователя
-            product_id: ID товара
+            chat_id: User ID
+            product_id: Product ID
 
         Returns:
-            Cart: Обновлённая корзина
+            Cart: Updated cart
         """
         cart = self._cart_repo.get_or_create(chat_id)
         cart.remove_item(product_id)
@@ -111,23 +102,23 @@ class CartService:
 
     def clear_cart(self, chat_id: int) -> None:
         """
-        Очищает корзину пользователя.
+        Empties the user's Recycle Bin.
 
         Args:
-            chat_id: ID пользователя
+            chat_id: User ID
         """
         self._cart_repo.clear_cart(chat_id)
         logger.info(f"🗑 Cart cleared for user {chat_id}")
 
     def validate_cart(self, chat_id: int) -> list[str]:
         """
-        Проверяет корзину против текущих остатков.
+        Checks the cart against current balances.
 
         Args:
-            chat_id: ID пользователя
+            chat_id: User ID
 
         Returns:
-            list[str]: Список ошибок (пустой если всё ОК)
+            list[str]: List of errors (empty if everything is OK)
         """
         cart = self._cart_repo.get_or_create(chat_id)
         return cart.validate_against_stock(

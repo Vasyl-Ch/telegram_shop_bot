@@ -6,9 +6,9 @@ from .cash_provider import CashProvider
 from .payment_poller import PaymentPoller
 
 __all__ = [
-    'PaymentProvider',
-    'PaymentProviderError',
-    'StripeProvider',
-    'CashProvider',
-    'PaymentPoller',
+    "PaymentProvider",
+    "PaymentProviderError",
+    "StripeProvider",
+    "CashProvider",
+    "PaymentPoller",
 ]

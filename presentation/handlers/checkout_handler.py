@@ -1,9 +1,9 @@
 """
-Обработчики оформления заказа:
-- Сбор телефона и адреса
-- Выбор способа оплаты
-- Создание заказа и Stripe Session
-- Ручная проверка оплаты
+Checkout Processors:
+- Phone and address collection
+- Choosing a payment method
+- Order creation and Stripe Session
+- Manual payment verification
 """
 
 import logging
@@ -22,7 +22,6 @@ from infrastructure.payments.stripe_provider import StripeProvider
 from infrastructure.payments.cash_provider import CashProvider
 from infrastructure.payments.payment_provider import PaymentProviderError
 from domain.enums.payment_method import PaymentMethod
-from domain.enums.order_status import OrderStatus
 from presentation.keyboards.inline_keyboards import (
     get_payment_method_keyboard,
     get_stripe_payment_keyboard,
@@ -38,7 +37,6 @@ from utils.formatters import (
 )
 from application.dto.order_dto import (
     CheckoutStateDTO,
-    OrderCreateDTO,
     PaymentMethodDTO,
 )
 from utils.helpers import get_customer_name, TTLCache
@@ -53,25 +51,23 @@ def register_checkout_handlers(
     cart_repo: CartRepository,
     order_repo: OrderRepository,
     stripe_provider: StripeProvider,
-    cash_provider: CashProvider,
     seller_chat_id: str,
 ) -> None:
     """
-    Регистрирует обработчики оформления заказа.
+    Registers checkout handlers.
 
     Args:
-        bot: Инстанс бота
-        order_service: Сервис заказов
-        payment_service: Сервис платежей
-        cart_repo: Репозиторий корзин
-        order_repo: Репозиторий заказов
-        stripe_provider: Stripe провайдер
-        cash_provider: COD провайдер
-        seller_chat_id: ID чата продавца
+        bot: Bot instance
+        order_service: Order Service
+        payment_service: Payment Service
+        cart_repo: Recycle Bin Repository
+        order_repo: Order Repository
+        stripe_provider: Stripe provider
+        seller_chat_id: Merchant Chat ID
     """
 
     # ──────────────────────────────────────────────
-    # Начало оформления
+    # Start of registration
     # ──────────────────────────────────────────────
 
     @bot.callback_query_handler(func=lambda c: c.data == "checkout:start")
@@ -86,14 +82,13 @@ def register_checkout_handlers(
         bot.answer_callback_query(call.id)
         bot.send_message(
             chat_id,
-            "📱 Укажите ваш номер телефона:\n"
-            "(например: +7 999 123-45-67)",
+            "📱 Укажите ваш номер телефона:\n" "(например: +380 99 123 45 67)",
             reply_markup=get_cancel_keyboard(),
         )
         bot.register_next_step_handler_by_chat_id(chat_id, _get_phone)
 
     # ──────────────────────────────────────────────
-    # Отмена оформления
+    # Cancellation of registration
     # ──────────────────────────────────────────────
 
     @bot.message_handler(func=lambda m: m.text == "❌ Отменить оформление")
@@ -117,11 +112,11 @@ def register_checkout_handlers(
         )
 
     # ──────────────────────────────────────────────
-    # Шаги сбора данных
+    # Data Collection Steps
     # ──────────────────────────────────────────────
 
     def _get_phone(message: types.Message) -> None:
-        """Шаг 1: получаем телефон."""
+        """Step 1: Get the phone."""
         if message.text == "❌ Отменить оформление":
             _checkout_state.pop(message.chat.id, None)
             bot.send_message(
@@ -141,7 +136,6 @@ def register_checkout_handlers(
             bot.register_next_step_handler(message, _get_phone)
             return
 
-        # Сохраняем временно в _checkout_state
         _checkout_state[message.chat.id] = CheckoutStateDTO(
             chat_id=message.chat.id,
             phone=phone,
@@ -155,7 +149,7 @@ def register_checkout_handlers(
         bot.register_next_step_handler(message, _get_address)
 
     def _get_address(message: types.Message) -> None:
-        """Шаг 2: получаем адрес."""
+        """Step 2: Get the address."""
         if message.text == "❌ Отменить оформление":
             _checkout_state.pop(message.chat.id, None)
             bot.send_message(
@@ -178,13 +172,11 @@ def register_checkout_handlers(
         state = _checkout_state.get(message.chat.id)
         if not state:
             bot.send_message(
-                message.chat.id,
-                "❌ Сессия устарела. Начните оформление заново."
+                message.chat.id, "❌ Сессия устарела. Начните оформление заново."
             )
             return
         state.address = address
 
-        # Переходим к выбору способа оплаты
         bot.send_message(
             message.chat.id,
             "💳 Выберите способ оплаты:",
@@ -197,7 +189,7 @@ def register_checkout_handlers(
         )
 
     # ──────────────────────────────────────────────
-    # Выбор способа оплаты
+    # Choosing a payment method
     # ──────────────────────────────────────────────
 
     @bot.callback_query_handler(
@@ -229,7 +221,6 @@ def register_checkout_handlers(
             bot.answer_callback_query(call.id, str(e))
             return
 
-        # ✅ Сохранить корзину на случай rollback
         cart = cart_repo.get_or_create(chat_id)
         cart_backup = cart_repo.get_or_create(chat_id)  # Копия
 
@@ -246,48 +237,45 @@ def register_checkout_handlers(
                 payment_dto.payment_method,
             )
 
-            # ✅ Очищаем состояние ПОСЛЕ успешного создания заказа
             _checkout_state.pop(chat_id, None)
 
-            # Обрабатываем платеж
             if payment_dto.payment_method == PaymentMethod.STRIPE:
-                _handle_stripe_payment(bot, order, order_repo, stripe_provider, seller_chat_id)
+                _handle_stripe_payment(
+                    bot, order, order_repo, stripe_provider, seller_chat_id
+                )
             elif payment_dto.payment_method == PaymentMethod.CASH:
                 _handle_cash_payment(bot, order, order_repo, seller_chat_id)
 
-            # ✅ Очищаем корзину только если все успешно
             cart_repo.clear_cart(chat_id)
 
         except PaymentProviderError as e:
-            # ✅ Rollback: удаляем заказ и восстанавливаем корзину
             if order:
                 order_repo.delete(order.order_id)
                 logger.error(f"Payment failed, order #{order.order_id} rolled back")
 
-            # Восстанавливаем корзину
             cart_repo.update(cart_backup)
 
             bot.send_message(
                 chat_id,
                 f"❌ Ошибка создания платежа: {e}\n"
-                "Ваша корзина сохранена. Попробуйте снова."
+                "Ваша корзина сохранена. Попробуйте снова.",
             )
         except Exception as e:
             logger.error(f"Checkout error: {e}", exc_info=True)
 
-            # Общий rollback
             if order:
                 order_repo.delete(order.order_id)
             cart_repo.update(cart_backup)
 
             bot.send_message(
                 chat_id,
-                "⚠️ Произошла ошибка. Попробуйте позже.\n"
-                "Ваша корзина сохранена."
+                f"⚠️ Произошла ошибка. Попробуйте позже.\n"
+                "Ваша корзина сохранена.\n"
+                "Если нужна помощь свяжитесь с менеджером.",
             )
 
     # ──────────────────────────────────────────────
-    # Ручная проверка оплаты Stripe
+    # Manual Stripe Payment Verification
     # ──────────────────────────────────────────────
 
     @bot.callback_query_handler(
@@ -324,12 +312,11 @@ def register_checkout_handlers(
         except Exception as e:
             logger.error(f"Payment check error: {e}")
             bot.send_message(
-                call.message.chat.id,
-                "❌ Ошибка проверки. Попробуйте позже."
+                call.message.chat.id, "❌ Ошибка проверки. Попробуйте позже."
             )
 
     # ──────────────────────────────────────────────
-    # Отмена заказа пользователем
+    # Cancellation of an order by a user
     # ──────────────────────────────────────────────
 
     @bot.callback_query_handler(
@@ -360,7 +347,7 @@ def register_checkout_handlers(
             bot.answer_callback_query(call.id, "Ошибка отмены.")
 
     # ──────────────────────────────────────────────
-    # Мои заказы
+    # My Orders
     # ──────────────────────────────────────────────
 
     @bot.message_handler(func=lambda m: m.text == "📦 Мои заказы")
@@ -377,20 +364,16 @@ def register_checkout_handlers(
         bot.send_message(
             message.chat.id,
             f"📦 <b>Ваши заказы ({len(orders)}):</b>",
-            parse_mode="HTML"
+            parse_mode="HTML",
         )
 
         for order in orders_sorted[:10]:
             text = format_order_for_customer(order)
-            bot.send_message(
-                message.chat.id,
-                text,
-                parse_mode="HTML"
-            )
+            bot.send_message(message.chat.id, text, parse_mode="HTML")
 
 
 # ──────────────────────────────────────────────────────────────
-# Внутренние хелперы (не handlers)
+# Internal helpers (not handlers)
 # ──────────────────────────────────────────────────────────────
 
 _checkout_state = TTLCache(ttl_minutes=30)
@@ -403,12 +386,11 @@ def _handle_stripe_payment(
     stripe_provider: StripeProvider,
     seller_chat_id: str,
 ) -> None:
-    """Обрабатывает создание Stripe Checkout Session."""
+    """Handles the creation of a Stripe Checkout Session."""
     try:
         payment_data = asyncio.run(stripe_provider.create_payment(order))
         order.set_stripe_session(payment_data["payment_id"])
 
-        # ✅ СОХРАНИТЬ ИЗМЕНЕНИЯ
         order = order_repo.update(order)
 
         text = format_payment_link(payment_data["payment_url"], order.order_id)
@@ -422,15 +404,13 @@ def _handle_stripe_payment(
             reply_markup=keyboard,
         )
 
-        # ✅ Передаем order_repo
         _notify_seller_new_order(bot, order, order_repo, seller_chat_id)
 
     except PaymentProviderError as e:
         logger.error(f"Stripe error: {e}")
         bot.send_message(
             order.chat_id,
-            f"❌ Ошибка создания платежа: {e}\n"
-            "Попробуйте выбрать оплату наличными."
+            f"❌ Ошибка создания платежа: {e}\n" "Попробуйте выбрать оплату наличными.",
         )
 
 
@@ -440,7 +420,7 @@ def _handle_cash_payment(
     order_repo: OrderRepository,
     seller_chat_id: str,
 ) -> None:
-    """Обрабатывает заказ с оплатой наличными."""
+    """Processes the order with cash payment."""
     bot.send_message(
         order.chat_id,
         f"✅ <b>Заказ #{order.order_id} оформлен!</b>\n\n"
@@ -450,7 +430,6 @@ def _handle_cash_payment(
         parse_mode="HTML",
         reply_markup=get_main_menu_keyboard(),
     )
-    # ✅ Передаем order_repo
     _notify_seller_new_order(bot, order, order_repo, seller_chat_id)
 
 
@@ -460,7 +439,7 @@ def _notify_seller_new_order(
     order_repo: OrderRepository,
     seller_chat_id: str,
 ) -> None:
-    """Уведомляет продавца о новом заказе."""
+    """Notifies the seller of a new order."""
     if not seller_chat_id:
         return
     try:
@@ -468,6 +447,7 @@ def _notify_seller_new_order(
         text = format_order_for_seller(order, customer_name)
 
         from presentation.keyboards.inline_keyboards import get_seller_order_keyboard
+
         msg = bot.send_message(
             seller_chat_id,
             text,
@@ -475,7 +455,6 @@ def _notify_seller_new_order(
             reply_markup=get_seller_order_keyboard(order, stage="new"),
         )
 
-        # ✅ СОХРАНИТЬ seller_message_id
         order.seller_message_id = msg.message_id
         order_repo.update(order)
 
@@ -489,7 +468,7 @@ def _notify_seller_paid(
     order_repo: OrderRepository,
     seller_chat_id: str,
 ) -> None:
-    """Уведомляет продавца об оплате заказа."""
+    """Notifies the seller when the order has been paid."""
     if not seller_chat_id:
         return
     try:
@@ -500,7 +479,6 @@ def _notify_seller_paid(
         )
         from presentation.keyboards.inline_keyboards import get_seller_order_keyboard
 
-        # ✅ msg ТЕПЕРЬ ОПРЕДЕЛЕНА
         msg = bot.send_message(
             seller_chat_id,
             text,
@@ -508,7 +486,6 @@ def _notify_seller_paid(
             reply_markup=get_seller_order_keyboard(order, stage="new"),
         )
 
-        # ✅ Обновить seller_message_id если его ещё нет
         if not order.seller_message_id:
             order.seller_message_id = msg.message_id
             order_repo.update(order)
@@ -521,10 +498,11 @@ def _notify_seller_paid(
 # TTL Cleanup Worker
 # ──────────────────────────────────────────────────────────────
 
+
 def _cleanup_expired_checkouts():
-    """Фоновый worker для очистки устаревших сессий оформления."""
+    """A background worker to clean up stale checkout sessions."""
     while True:
-        time.sleep(300)  # Каждые 5 минут
+        time.sleep(300)
         try:
             expired_chats = [
                 chat_id
@@ -540,7 +518,6 @@ def _cleanup_expired_checkouts():
             logger.error(f"Checkout cleanup error: {e}")
 
 
-# Запустить worker при импорте модуля
 _cleanup_thread = threading.Thread(
     target=_cleanup_expired_checkouts,
     name="CheckoutCleanup",

@@ -1,17 +1,16 @@
 """
-Репозиторий для каталога товаров.
+Repository for the product catalog.
 
-Обертка над вашим существующим CatalogLoader.
-Адаптирует его к интерфейсу Repository.
+Wrapper over your existing CatalogLoader.
+Adapts it to the Repository interface.
 
-Применение Adapter Pattern:
-- CatalogLoader работает со словарями
-- CatalogRepository работает с Product entities
-- Адаптер преобразует между ними
+Adapter Pattern Application:
+- CatalogLoader works with dictionaries
+- CatalogRepository works with Product entities
+- Adapter converts between them
 """
 
 from typing import List, Optional
-from decimal import Decimal
 import logging
 
 from domain.entities.product import Product
@@ -22,53 +21,53 @@ logger = logging.getLogger(__name__)
 
 class CatalogRepository:
     """
-    Репозиторий каталога товаров.
+    Product catalog repository.
 
-    Не наследуется от BaseRepository, т.к. имеет специфичную логику:
-    - Данные из Google Sheets (read-only через API)
-    - Обновление остатков (write)
-    - Автоматическая синхронизация
+    It is not inherited from BaseRepository because it has specific logic:
+    - Data from Google Sheets (read-only via API)
+    - Update balances (write)
+    - Automatic synchronization
     """
 
     def __init__(self, google_sheets_client: GoogleSheetsClient):
         """
         Args:
-            google_sheets_client: Клиент для работы с Google Sheets
+            google_sheets_client: Client for working with Google Sheets
         """
         self._client = google_sheets_client
         logger.info("✅ CatalogRepository initialized")
 
     def get_by_id(self, product_id: int) -> Optional[Product]:
         """
-        Получает товар по ID.
+        Receives the goods by ID.
 
         Args:
-            product_id: ID товара
+            product_id: Product ID
 
         Returns:
-            Optional[Product]: Товар если найден
+            Optional[Product]: Item if found
         """
         data = self._client.data.get(product_id)
         if not data:
             return None
 
         try:
-            return Product.from_dict({**data, 'id': product_id})
+            return Product.from_dict({**data, "id": product_id})
         except Exception as e:
             logger.error(f"Error creating Product from data: {e}")
             return None
 
     def get_all(self) -> List[Product]:
         """
-        Получает все товары из каталога.
+        Receives all products from the catalog.
 
         Returns:
-            List[Product]: Список всех товаров
+            List[Product]: List of all products
         """
         products = []
         for product_id, data in self._client.data.items():
             try:
-                product = Product.from_dict({**data, 'id': product_id})
+                product = Product.from_dict({**data, "id": product_id})
                 products.append(product)
             except Exception as e:
                 logger.error(f"Error creating Product {product_id}: {e}")
@@ -77,20 +76,20 @@ class CatalogRepository:
 
     def get_by_category(self, category: str) -> List[Product]:
         """
-        Получает товары определенной категории.
+        Receives goods of a certain category.
 
         Args:
-            category: Название категории
+            category: Category name
 
         Returns:
-            List[Product]: Список товаров категории
+            List[Product]: List of products in the category
         """
         items = self._client.get_by_category(category)
         products = []
 
         for product_id, data in items.items():
             try:
-                product = Product.from_dict({**data, 'id': product_id})
+                product = Product.from_dict({**data, "id": product_id})
                 products.append(product)
             except Exception as e:
                 logger.error(f"Error creating Product {product_id}: {e}")
@@ -99,29 +98,29 @@ class CatalogRepository:
 
     def get_categories(self) -> List[str]:
         """
-        Получает список всех категорий.
+        Gets a list of all categories.
 
         Returns:
-            List[str]: Список уникальных категорий
+            List[str]: List of unique categories
         """
         return self._client.get_categories()
 
     def search(self, query: str) -> List[Product]:
         """
-        Поиск товаров по названию.
+        Search for products by name.
 
         Args:
-            query: Поисковый запрос
+            query: Search query
 
         Returns:
-            List[Product]: Найденные товары
+            List[Product]: Products found
         """
         items = self._client.search_items(query)
         products = []
 
         for product_id, data in items.items():
             try:
-                product = Product.from_dict({**data, 'id': product_id})
+                product = Product.from_dict({**data, "id": product_id})
                 products.append(product)
             except Exception as e:
                 logger.error(f"Error creating Product {product_id}: {e}")
@@ -130,21 +129,19 @@ class CatalogRepository:
 
     def reduce_stock(self, product_id: int, quantity: int) -> bool:
         """
-        Уменьшает остаток товара.
+        Reduces the balance of goods.
 
         Args:
-            product_id: ID товара
-            quantity: Количество для списания
+            product_id: Product ID
+            quantity: Quantity to be written off
 
         Returns:
-            bool: True если успешно
+            bool: True if successful
         """
         try:
             success = self._client.reduce_stock(product_id, quantity)
             if success:
-                logger.info(
-                    f"📦 Stock reduced: Product #{product_id}, qty: {quantity}"
-                )
+                logger.info(f"📦 Stock reduced: Product #{product_id}, qty: {quantity}")
             return success
         except Exception as e:
             logger.error(f"Error reducing stock: {e}")
@@ -152,33 +149,33 @@ class CatalogRepository:
 
     def is_available(self, product_id: int, quantity: int = 1) -> bool:
         """
-        Проверяет доступность товара в нужном количестве.
+        Checks the availability of goods in the required quantity.
 
         Args:
-            product_id: ID товара
-            quantity: Требуемое количество
+            product_id: Product ID
+            quantity: Required quantity
 
         Returns:
-            bool: True если доступно
+            bool: True if available
         """
         return self._client.is_available(product_id, quantity)
 
     def get_stock(self, product_id: int) -> int:
         """
-        Получает текущий остаток товара.
+        Receives the current balance of the product.
 
         Args:
-            product_id: ID товара
+            product_id: Product ID
 
         Returns:
-            int: Остаток на складе
+            int: Stock Balance
         """
         product = self.get_by_id(product_id)
         return product.stock if product else 0
 
     def reload(self) -> None:
         """
-        Принудительно перезагружает каталог из Google Sheets.
+        Force reload directory from Google Sheets.
         """
         try:
             self._client.reload()
@@ -188,20 +185,20 @@ class CatalogRepository:
 
     def get_low_stock_products(self, threshold: int = 5) -> List[Product]:
         """
-        Получает товары с низким остатком.
+        Receives goods with a low balance.
 
         Args:
-            threshold: Пороговое значение
+            threshold: Threshold value
 
         Returns:
-            List[Product]: Товары с остатком <= threshold
+            List[Product]: Products with a balance of <= threshold
         """
         items = self._client.get_low_stock_items(threshold)
         products = []
 
         for product_id, data in items.items():
             try:
-                product = Product.from_dict({**data, 'id': product_id})
+                product = Product.from_dict({**data, "id": product_id})
                 products.append(product)
             except Exception as e:
                 logger.error(f"Error creating Product {product_id}: {e}")

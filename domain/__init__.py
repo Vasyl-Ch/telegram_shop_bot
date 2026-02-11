@@ -1,3 +1,3 @@
 """Domain layer package."""
 
-__all__ = ['entities', 'enums']
+__all__ = ["entities", "enums"]
