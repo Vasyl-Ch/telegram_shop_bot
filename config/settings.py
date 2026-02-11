@@ -1,9 +1,11 @@
 import os
+import logging
 from dataclasses import dataclass
 from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -14,7 +16,7 @@ class Settings:
     All settings are loaded from environment variables and validated
     at application startup (fail-fast approach).
     """
-
+    support_manager_id: str
     # Telegram Bot
     bot_token: str
     bot_username: str
@@ -51,6 +53,7 @@ class Settings:
             "BOT_TOKEN": "bot_token",
             "BOT_USERNAME": "bot_username",
             "SELLER_CHAT_ID": "seller_chat_id",
+            "SUPPORT_MANAGER_ID": "support_manager_id",
             "GOOGLE_DISK_ID": "google_disk_id",
             "JSON_KEY_FILE": "json_key_file",
             "STRIPE_SECRET_KEY": "stripe_secret_key",
@@ -62,6 +65,7 @@ class Settings:
 
         for env_var, field_name in required_vars.items():
             value = os.getenv(env_var)
+            logger.info(f"🔍 Loading {env_var}: {repr(value)}")
             if not value:
                 missing.append(env_var)
             config[field_name] = value or ""

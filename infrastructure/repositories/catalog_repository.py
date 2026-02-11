@@ -142,6 +142,13 @@ class CatalogRepository:
             success = self._client.reduce_stock(product_id, quantity)
             if success:
                 logger.info(f"📦 Stock reduced: Product #{product_id}, qty: {quantity}")
+
+                product = self.get_by_id(product_id)
+                if product and product.stock > 0 and product.stock <= 5:
+                    logger.info(
+                        f"⚠️ Low stock detected for product #{product_id}: {product.stock} left"
+                    )
+
             return success
         except Exception as e:
             logger.error(f"Error reducing stock: {e}")
@@ -204,3 +211,21 @@ class CatalogRepository:
                 logger.error(f"Error creating Product {product_id}: {e}")
 
         return products
+
+    def check_and_notify_low_stock(
+        self, notification_service, threshold: int = 5
+    ) -> None:
+        """
+        Checks products with low stock and sends notifications.
+
+        Args:
+            notification_service: Notification Service
+            threshold: Low balance threshold
+        """
+        low_stock_products = self.get_low_stock_products(threshold)
+
+        for product in low_stock_products:
+            notification_service.notify_low_stock(product.name, product.stock)
+            logger.info(
+                f"⚠️ Low stock notification sent for {product.name} ({product.stock} left)"
+            )

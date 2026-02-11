@@ -56,11 +56,21 @@ def get_products_keyboard(
             )
         )
 
-    markup.add(
-        types.InlineKeyboardButton(
-            text="⬅️ Назад к категориям", callback_data="back:categories"
+    if category == "catalog":
+        pass
+    elif category == "search":
+        markup.add(
+            types.InlineKeyboardButton(
+                text="⬅️ Назад к каталогу", callback_data="back:catalog"
+            )
         )
-    )
+    else:
+        markup.add(
+            types.InlineKeyboardButton(
+                text="⬅️ Назад к категориям", callback_data="back:categories"
+            )
+        )
+
     return markup
 
 

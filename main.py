@@ -18,8 +18,10 @@ import time
 import telebot
 import os
 
+from config import containers
 from config.settings import settings
 from config.containers import Container
+from presentation.middleware.ban_check_middleware import BanCheckMiddleware
 from utils.logger import setup_logging
 
 from presentation.handlers.start_handler import register_start_handlers
@@ -48,6 +50,7 @@ def create_bot() -> telebot.TeleBot:
 
     bot.setup_middleware(LoggingMiddleware())
     bot.setup_middleware(RateLimitMiddleware(max_requests=10, time_window=10))
+    bot.setup_middleware(BanCheckMiddleware(containers.Container.user_limit_repository()))
 
     return bot
 
@@ -125,8 +128,6 @@ def register_all_handlers(bot: telebot.TeleBot, container: Container) -> None:
         payment_service=container.payment_service(),
         cart_repo=container.cart_repository(),
         order_repo=container.order_repository(),
-        stripe_provider=container.stripe_provider(),
-        cash_provider=container.cash_provider(),
         seller_chat_id=settings.seller_chat_id,
     )
 
@@ -140,6 +141,7 @@ def register_all_handlers(bot: telebot.TeleBot, container: Container) -> None:
         order_repo=container.order_repository(),
         seller_chat_id=settings.seller_chat_id,
         catalog_repo=container.catalog_repository(),
+        user_limit_repo=container.user_limit_repository(),
     )
 
     logger.info("✅ All handlers registered")
@@ -186,6 +188,105 @@ def start_background_workers(container: Container) -> None:
     reload_thread.start()
     logger.info("🔄 Catalog auto-reload worker started")
 
+    # ════════════════════════════════════════════════════════════
+    # Daily Statistics Worker (send at 9:00 am)
+    # ════════════════════════════════════════════════════════════
+
+    def daily_statistics_worker():
+        """Background worker to send daily statistics."""
+        statistics_service = container.statistics_service()
+        notification_service = container.notification_service()
+
+        import time
+        from datetime import datetime, timedelta
+
+        last_sent_date = None
+
+        while True:
+            try:
+                now = datetime.now()
+
+                if now.hour == 9 and 0 <= now.minute < 5:
+                    current_date = now.date()
+
+                    if last_sent_date != current_date:
+                        yesterday = now - timedelta(days=1)
+                        stats = statistics_service.get_daily_statistics(yesterday)
+
+                        if stats.get("has_changes"):
+                            message = statistics_service.format_daily_statistics(stats)
+                            if message:
+                                notification_service._bot.send_message(
+                                    notification_service._seller_chat_id,
+                                    message,
+                                    parse_mode="HTML",
+                                )
+                                logger.info(
+                                    f"📊 Daily statistics sent for {stats['date']}"
+                                )
+                        else:
+                            logger.info(
+                                f"📊 No changes for {stats['date']}, skipping statistics"
+                            )
+
+                        last_sent_date = current_date
+
+                time.sleep(60)
+
+            except Exception as e:
+                logger.error(f"❌ Daily statistics worker error: {e}", exc_info=True)
+                time.sleep(60)
+
+    statistics_thread = threading.Thread(
+        target=daily_statistics_worker,
+        name="DailyStatistics",
+        daemon=True,
+    )
+    statistics_thread.start()
+    logger.info("📊 Daily statistics worker started")
+
+    # ════════════════════════════════════════════════════════════
+    # Low Stock Check Worker (checked every 6 hours)
+    # ════════════════════════════════════════════════════════════
+
+    def low_stock_check_worker():
+        """Background worker для проверки низких остатков."""
+        catalog_repo = container.catalog_repository()
+        notification_service = container.notification_service()
+
+        notified_products = set()
+
+        while True:
+            try:
+                low_stock_products = catalog_repo.get_low_stock_products(threshold=5)
+
+                for product in low_stock_products:
+                    if product.product_id not in notified_products:
+                        notification_service.notify_low_stock(
+                            product.name, product.stock
+                        )
+                        notified_products.add(product.product_id)
+                        logger.info(
+                            f"⚠️ Low stock notification sent for {product.name}"
+                        )
+
+                current_low_stock_ids = {p.product_id for p in low_stock_products}
+                notified_products.intersection_update(current_low_stock_ids)
+
+                time.sleep(21600)
+
+            except Exception as e:
+                logger.error(f"❌ Low stock check worker error: {e}", exc_info=True)
+                time.sleep(21600)
+
+    low_stock_thread = threading.Thread(
+        target=low_stock_check_worker,
+        name="LowStockCheck",
+        daemon=True,
+    )
+    low_stock_thread.start()
+    logger.info("⚠️ Low stock check worker started")
+
 
 def ensure_data_directory():
     """
@@ -231,7 +332,6 @@ def main() -> None:
     # ════════════════════════════════════════════════════════════
     # 5. Inject the bot into NotificationService
     # ════════════════════════════════════════════════════════════
-
 
     notification_service = container.notification_service()
     notification_service._bot = bot

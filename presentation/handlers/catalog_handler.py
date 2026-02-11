@@ -103,25 +103,46 @@ def register_catalog_handlers(
             )
         bot.answer_callback_query(call.id)
 
+    @bot.callback_query_handler(func=lambda c: c.data == "back:catalog")
+    def handle_back_to_catalog(call: types.CallbackQuery) -> None:
+        """Return to the full catalog."""
+        all_products = catalog_repo.get_all()
+        try:
+            bot.edit_message_text(
+                text="📋 <b>Каталог товаров</b>\n\nВсе доступные товары:",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=get_products_keyboard(all_products, "catalog"),
+            )
+        except Exception:
+            bot.send_message(
+                call.message.chat.id,
+                "📋 <b>Каталог товаров</b>\n\nВсе доступные товары:",
+                parse_mode="HTML",
+                reply_markup=get_products_keyboard(all_products, "catalog"),
+            )
+        bot.answer_callback_query(call.id)
+
     # ──────────────────────────────────────────────
     # Full catalog
     # ──────────────────────────────────────────────
 
-    @bot.message_handler(
-        func=lambda m: m.text in ("📋 Каталог",)
-    )
+    @bot.message_handler(func=lambda m: m.text in ("📋 Каталог",))
     @bot.message_handler(commands=["catalog"])
     def handle_full_catalog(message: types.Message) -> None:
-        categories = catalog_repo.get_categories()
-        if not categories:
+        """Shows a complete list of all products."""
+        all_products = catalog_repo.get_all()
+
+        if not all_products:
             bot.send_message(message.chat.id, "Каталог пуст.")
             return
 
         bot.send_message(
             message.chat.id,
-            "📋 <b>Каталог товаров</b>\n\nВыберите категорию:",
+            "📋 <b>Каталог товаров</b>\n\nВсе доступные товары:",
             parse_mode="HTML",
-            reply_markup=get_categories_keyboard(categories),
+            reply_markup=get_products_keyboard(all_products, "catalog"),
         )
 
     # ──────────────────────────────────────────────

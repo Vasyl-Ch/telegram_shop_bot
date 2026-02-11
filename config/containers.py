@@ -7,6 +7,7 @@ Uses the Service Locator pattern via dependency-injector.
 
 from dependency_injector import containers, providers
 
+from application.services.statistics_service import StatisticsService
 from infrastructure.external.google_sheets_client import GoogleSheetsClient
 from infrastructure.repositories.order_repository import OrderRepository
 from infrastructure.repositories.cart_repository import CartRepository
@@ -19,6 +20,7 @@ from application.services.order_service import OrderService
 from application.services.cart_service import CartService
 from application.services.payment_service import PaymentService
 from application.services.notification_service import NotificationService
+from infrastructure.repositories.user_limit_repository import UserLimitRepository
 
 
 class Container(containers.DeclarativeContainer):
@@ -66,6 +68,11 @@ class Container(containers.DeclarativeContainer):
         google_sheets_client=google_sheets_client,
     )
 
+    user_limit_repository = providers.Singleton(
+        UserLimitRepository,
+        persistence_file="data/user_limits.json",
+    )
+
     # ══════════════════════════════════════════════════════════════
     # Infrastructure Layer - Payment Providers
     # ══════════════════════════════════════════════════════════════
@@ -106,6 +113,11 @@ class Container(containers.DeclarativeContainer):
         notification_service=notification_service,
         stripe_provider=stripe_provider,
         cash_provider=cash_provider,
+    )
+
+    statistics_service = providers.Singleton(
+        StatisticsService,
+        order_repository=order_repository,
     )
 
     # ══════════════════════════════════════════════════════════════

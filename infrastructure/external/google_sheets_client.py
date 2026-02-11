@@ -30,6 +30,7 @@ class GoogleSheetsClient:
             google_disk_id: Google Spreadsheet ID
             json_key_file: Path to the JSON file with credentials
         """
+        logger.info(f"🔍 GoogleSheetsClient init - json_key_file: {repr(json_key_file)}")
         self.google_disk_id = google_disk_id
         self.json_key_file = json_key_file
         self.lock = Lock()

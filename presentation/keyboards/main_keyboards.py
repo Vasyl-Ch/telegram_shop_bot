@@ -22,7 +22,7 @@ def get_main_menu_keyboard() -> types.ReplyKeyboardMarkup:
     )
     markup.row(
         types.KeyboardButton("📦 Мои заказы"),
-        types.KeyboardButton("🔄 Обновить"),
+        types.KeyboardButton("💬 Связаться с менеджером"),
     )
     return markup
 
@@ -52,10 +52,15 @@ def get_seller_main_keyboard() -> types.ReplyKeyboardMarkup:
         types.KeyboardButton("✅ Выполненные"),
     )
     markup.row(
-        types.KeyboardButton("📊 Статистика"),
-        types.KeyboardButton("⚠️ Мало на складе"),
+        types.KeyboardButton("🗂 Заказы"),
+        types.KeyboardButton("💳 Платежи"),
     )
     markup.row(
+        types.KeyboardButton("👥 Управление пользователями"),
+        types.KeyboardButton("📊 Статистика"),
+    )
+    markup.row(
+        types.KeyboardButton("⚠️ Мало на складе"),
         types.KeyboardButton("🔄 Обновить каталог"),
     )
     return markup

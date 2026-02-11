@@ -11,6 +11,7 @@ from telebot import types
 from application.services.order_service import OrderService
 from infrastructure.repositories.order_repository import OrderRepository
 from infrastructure.repositories.catalog_repository import CatalogRepository
+from infrastructure.repositories.user_limit_repository import UserLimitRepository
 from domain.enums.order_status import OrderStatus
 from presentation.keyboards.inline_keyboards import get_seller_order_keyboard
 from presentation.keyboards.main_keyboards import get_seller_main_keyboard
@@ -29,6 +30,7 @@ def register_seller_handlers(
     order_repo: OrderRepository,
     seller_chat_id: str,
     catalog_repo: CatalogRepository,
+    user_limit_repo: UserLimitRepository,
 ) -> None:
     """
     Registers seller panel handlers.
@@ -118,6 +120,440 @@ def register_seller_handlers(
             "\n".join(lines),
             parse_mode="HTML",
         )
+
+        # ──────────────────────────────────────────────
+        # Menu "Orders"
+        # ──────────────────────────────────────────────
+
+    @bot.message_handler(func=lambda m: m.text == "🗂 Заказы")
+    def handle_orders_menu(message: types.Message) -> None:
+        """Показывает меню управления заказами."""
+        if not is_seller(message.chat.id):
+            return
+
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+        markup.row(
+            types.KeyboardButton("📋 История выполненных"),
+            types.KeyboardButton("⏳ История незавершённых"),
+        )
+        markup.row(
+            types.KeyboardButton("⬅️ Назад в главное меню"),
+        )
+
+        bot.send_message(
+            message.chat.id,
+            "🗂 <b>Управление заказами</b>\n\nВыберите действие:",
+            parse_mode="HTML",
+            reply_markup=markup,
+        )
+
+    @bot.message_handler(func=lambda m: m.text == "📋 История выполненных")
+    def handle_completed_orders_history(message: types.Message) -> None:
+        """Detailed history of completed orders."""
+        if not is_seller(message.chat.id):
+            return
+
+        delivered = order_repo.get_by_status(OrderStatus.DELIVERED)
+        if not delivered:
+            bot.send_message(message.chat.id, "Нет выполненных заказов.")
+            return
+
+        for order in sorted(delivered, key=lambda o: o.created_at, reverse=True)[:20]:
+            customer_name = get_customer_name(bot, order.chat_id)
+            text = format_order_for_seller(order, customer_name)
+            bot.send_message(message.chat.id, text, parse_mode="HTML")
+
+        bot.send_message(
+            message.chat.id,
+            f"✅ Показано {min(len(delivered), 20)} из {len(delivered)} выполненных заказов",
+        )
+
+    @bot.message_handler(func=lambda m: m.text == "⏳ История незавершённых")
+    def handle_pending_orders_history(message: types.Message) -> None:
+        """Detailed history of unfinished orders."""
+        if not is_seller(message.chat.id):
+            return
+
+        all_orders = order_repo.get_all()
+        pending = [o for o in all_orders if not o.is_final()]
+
+        if not pending:
+            bot.send_message(message.chat.id, "Нет незавершённых заказов.")
+            return
+
+        for order in sorted(pending, key=lambda o: o.created_at, reverse=True):
+            customer_name = get_customer_name(bot, order.chat_id)
+            text = format_order_for_seller(order, customer_name)
+
+            stage = "confirmed" if order.status == OrderStatus.CONFIRMED else "new"
+            bot.send_message(
+                message.chat.id,
+                text,
+                parse_mode="HTML",
+                reply_markup=get_seller_order_keyboard(order, stage=stage),
+            )
+
+        bot.send_message(
+            message.chat.id,
+            f"⏳ Всего незавершённых заказов: {len(pending)}",
+        )
+
+    # ──────────────────────────────────────────────
+    # Payments menu
+    # ──────────────────────────────────────────────
+
+    @bot.message_handler(func=lambda m: m.text == "💳 Платежи")
+    def handle_payments_menu(message: types.Message) -> None:
+        """Shows the payment management menu."""
+        if not is_seller(message.chat.id):
+            return
+
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=1)
+        markup.row(
+            types.KeyboardButton("💳 История онлайн-оплат"),
+        )
+        markup.row(
+            types.KeyboardButton("⬅️ Назад в главное меню"),
+        )
+
+        bot.send_message(
+            message.chat.id,
+            "💳 <b>Управление платежами</b>\n\nВыберите действие:",
+            parse_mode="HTML",
+            reply_markup=markup,
+        )
+
+    @bot.message_handler(func=lambda m: m.text == "💳 История онлайн-оплат")
+    def handle_online_payments_history(message: types.Message) -> None:
+        """Online payment history with Stripe."""
+        if not is_seller(message.chat.id):
+            return
+
+        from domain.enums.payment_method import PaymentMethod
+
+        all_orders = order_repo.get_all()
+        stripe_orders = [
+            o
+            for o in all_orders
+            if o.payment_method == PaymentMethod.STRIPE and o.is_paid()
+        ]
+
+        if not stripe_orders:
+            bot.send_message(message.chat.id, "Нет онлайн-оплат.")
+            return
+
+        lines = [f"💳 <b>История онлайн-оплат: {len(stripe_orders)}</b>\n"]
+
+        total_amount = sum(o.total_amount for o in stripe_orders)
+
+        for order in sorted(stripe_orders, key=lambda o: o.created_at, reverse=True)[
+            :15
+        ]:
+            payment_date = order.updated_at.strftime("%d.%m.%Y %H:%M")
+            lines.append(
+                f"#{order.order_id} | "
+                f"{order.total_amount}₴ | "
+                f"{payment_date} | "
+                f"{order.status.display_name}"
+            )
+
+        lines.append(f"\n💰 <b>Общая сумма онлайн-оплат: {total_amount:.2f}₴</b>")
+
+        bot.send_message(
+            message.chat.id,
+            "\n".join(lines),
+            parse_mode="HTML",
+        )
+
+    @bot.message_handler(func=lambda m: m.text == "⬅️ Назад в главное меню")
+    def handle_back_to_seller_menu(message: types.Message) -> None:
+        """Return to the seller's main menu."""
+        if not is_seller(message.chat.id):
+            return
+
+        bot.send_message(
+            message.chat.id,
+            "👨‍💼 <b>Панель продавца</b>",
+            parse_mode="HTML",
+            reply_markup=get_seller_main_keyboard(),
+        )
+
+    # ──────────────────────────────────────────────
+    # Управление пользователями
+    # ──────────────────────────────────────────────
+
+    @bot.message_handler(func=lambda m: m.text == "👥 Управление пользователями")
+    def handle_users_menu(message: types.Message) -> None:
+        """Shows the user management menu."""
+        if not is_seller(message.chat.id):
+            return
+
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+        markup.row(
+            types.KeyboardButton("🚫 Добавить в бан"),
+            types.KeyboardButton("✅ Снять бан"),
+        )
+        markup.row(
+            types.KeyboardButton("📋 Список забаненных"),
+            types.KeyboardButton("🔓 Снять лимит"),
+        )
+        markup.row(
+            types.KeyboardButton("⬅️ Назад в главное меню"),
+        )
+
+        bot.send_message(
+            message.chat.id,
+            "👥 <b>Управление пользователями</b>\n\nВыберите действие:",
+            parse_mode="HTML",
+            reply_markup=markup,
+        )
+
+    @bot.message_handler(func=lambda m: m.text == "🚫 Добавить в бан")
+    def handle_ban_user_start(message: types.Message) -> None:
+        """Start of the user ban process."""
+        if not is_seller(message.chat.id):
+            return
+
+        bot.send_message(
+            message.chat.id,
+            "🚫 <b>Бан пользователя</b>\n\n"
+            "Введите ID пользователя (chat_id) которого нужно забанить:\n"
+            "Например: 123456789",
+            parse_mode="HTML",
+        )
+        bot.register_next_step_handler(message, _process_ban_user_id)
+
+    def _process_ban_user_id(message: types.Message) -> None:
+        """Handles ID input for banning."""
+        if not is_seller(message.chat.id):
+            return
+
+        try:
+            user_id = int(message.text.strip())
+
+            if str(user_id) == seller_chat_id:
+                bot.send_message(
+                    message.chat.id,
+                    "❌ Нельзя забанить продавца!",
+                )
+                return
+
+            if not hasattr(bot, "_temp_ban_data"):
+                bot._temp_ban_data = {}
+            bot._temp_ban_data[message.chat.id] = user_id
+
+            bot.send_message(
+                message.chat.id,
+                f"Введите причину бана для пользователя {user_id}:",
+            )
+            bot.register_next_step_handler(message, _process_ban_reason)
+
+        except ValueError:
+            bot.send_message(
+                message.chat.id,
+                "❌ Некорректный ID. Введите число.",
+            )
+
+    def _process_ban_reason(message: types.Message) -> None:
+        """Handles the entry of the ban reason."""
+        if not is_seller(message.chat.id):
+            return
+
+        reason = message.text.strip()
+        user_id = bot._temp_ban_data.get(message.chat.id)
+
+        if not user_id:
+            bot.send_message(message.chat.id, "❌ Ошибка: ID не найден.")
+            return
+
+        try:
+            limit = user_limit_repo.get_or_create(user_id)
+            limit.ban_user(reason)
+            user_limit_repo.update(limit)
+
+            del bot._temp_ban_data[message.chat.id]
+
+            bot.send_message(
+                message.chat.id,
+                f"✅ Пользователь {user_id} забанен.\n" f"Причина: {reason}",
+                reply_markup=get_seller_main_keyboard(),
+            )
+
+            try:
+                bot.send_message(
+                    user_id,
+                    f"🚫 <b>Ваш доступ к боту заблокирован</b>\n\n"
+                    f"Причина: {reason}\n\n"
+                    "Для разблокировки свяжитесь с администратором.",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                logger.warning(f"Could not notify user {user_id} about ban")
+
+        except Exception as e:
+            logger.error(f"Error banning user: {e}")
+            bot.send_message(
+                message.chat.id,
+                f"❌ Ошибка при бане пользователя: {e}",
+            )
+
+    @bot.message_handler(func=lambda m: m.text == "✅ Снять бан")
+    def handle_unban_user_start(message: types.Message) -> None:
+        """The start of the process of removing the ban."""
+        if not is_seller(message.chat.id):
+            return
+
+        bot.send_message(
+            message.chat.id,
+            "✅ <b>Снятие бана</b>\n\n"
+            "Введите ID пользователя (chat_id) для снятия бана:\n"
+            "Например: 123456789",
+            parse_mode="HTML",
+        )
+        bot.register_next_step_handler(message, _process_unban_user)
+
+    def _process_unban_user(message: types.Message) -> None:
+        """Handles the removal of the ban."""
+        if not is_seller(message.chat.id):
+            return
+
+        try:
+            user_id = int(message.text.strip())
+
+            limit = user_limit_repo.get(user_id)
+            if not limit or not limit.is_banned:
+                bot.send_message(
+                    message.chat.id,
+                    f"ℹ️ Пользователь {user_id} не забанен.",
+                )
+                return
+
+            limit.unban_user()
+            user_limit_repo.update(limit)
+
+            bot.send_message(
+                message.chat.id,
+                f"✅ Бан снят с пользователя {user_id}",
+                reply_markup=get_seller_main_keyboard(),
+            )
+
+            try:
+                bot.send_message(
+                    user_id,
+                    "✅ <b>Ваш доступ к боту восстановлен</b>\n\n"
+                    "Добро пожаловать обратно!",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                logger.warning(f"Could not notify user {user_id} about unban")
+
+        except ValueError:
+            bot.send_message(
+                message.chat.id,
+                "❌ Некорректный ID. Введите число.",
+            )
+        except Exception as e:
+            logger.error(f"Error unbanning user: {e}")
+            bot.send_message(
+                message.chat.id,
+                f"❌ Ошибка при снятии бана: {e}",
+            )
+
+    @bot.message_handler(func=lambda m: m.text == "📋 Список забаненных")
+    def handle_banned_list(message: types.Message) -> None:
+        """Shows a list of banned users."""
+        if not is_seller(message.chat.id):
+            return
+
+        banned = user_limit_repo.get_all_banned()
+
+        if not banned:
+            bot.send_message(message.chat.id, "✅ Нет забаненных пользователей.")
+            return
+
+        lines = [f"🚫 <b>Забаненные пользователи: {len(banned)}</b>\n"]
+
+        for limit in banned:
+            ban_date = (
+                limit.banned_at.strftime("%d.%m.%Y %H:%M")
+                if limit.banned_at
+                else "неизвестно"
+            )
+            lines.append(
+                f"• ID: {limit.chat_id}\n"
+                f"  Причина: {limit.ban_reason or 'не указана'}\n"
+                f"  Дата: {ban_date}\n"
+            )
+
+        bot.send_message(
+            message.chat.id,
+            "\n".join(lines),
+            parse_mode="HTML",
+        )
+
+    @bot.message_handler(func=lambda m: m.text == "🔓 Снять лимит")
+    def handle_remove_limit_start(message: types.Message) -> None:
+        """Beginning of the process of removing the limit."""
+        if not is_seller(message.chat.id):
+            return
+
+        bot.send_message(
+            message.chat.id,
+            "🔓 <b>Снятие лимита</b>\n\n"
+            "Введите ID пользователя (chat_id) для снятия лимита:\n"
+            "Например: 123456789\n\n"
+            "Это снимет как автоматический лимит за превышение, "
+            "так и любые установленные ограничения.",
+            parse_mode="HTML",
+        )
+        bot.register_next_step_handler(message, _process_remove_limit)
+
+    def _process_remove_limit(message: types.Message) -> None:
+        """Handles limit removals."""
+        if not is_seller(message.chat.id):
+            return
+
+        try:
+            user_id = int(message.text.strip())
+
+            limit = user_limit_repo.get(user_id)
+            if not limit:
+                bot.send_message(
+                    message.chat.id,
+                    f"ℹ️ У пользователя {user_id} нет установленных лимитов.",
+                )
+                return
+
+            limit.remove_custom_limit()
+            user_limit_repo.update(limit)
+
+            bot.send_message(
+                message.chat.id,
+                f"✅ Лимиты сняты с пользователя {user_id}",
+                reply_markup=get_seller_main_keyboard(),
+            )
+
+            try:
+                bot.send_message(
+                    user_id,
+                    "✅ <b>Ваши лимиты сняты</b>\n\n"
+                    "Вы можете продолжить использование бота без ограничений.",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                logger.warning(f"Could not notify user {user_id} about limit removal")
+
+        except ValueError:
+            bot.send_message(
+                message.chat.id,
+                "❌ Некорректный ID. Введите число.",
+            )
+        except Exception as e:
+            logger.error(f"Error removing limit: {e}")
+            bot.send_message(
+                message.chat.id,
+                f"❌ Ошибка при снятии лимита: {e}",
+            )
 
     # ──────────────────────────────────────────────
     # Statistics

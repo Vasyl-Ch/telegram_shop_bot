@@ -5,6 +5,7 @@ import logging
 import telebot
 from telebot import types
 
+from config.settings import settings
 from presentation.keyboards.main_keyboards import get_main_menu_keyboard
 
 logger = logging.getLogger(__name__)
@@ -67,6 +68,41 @@ def register_start_handlers(bot: telebot.TeleBot) -> None:
             parse_mode="HTML",
             reply_markup=get_main_menu_keyboard(),
         )
+
+    @bot.message_handler(func=lambda m: m.text == "💬 Связаться с менеджером")
+    def handle_contact_manager(message: types.Message) -> None:
+        """Handler of the 'Contact manager' button."""
+        try:
+            support_manager_id = settings.support_manager_id
+
+            if support_manager_id.startswith("@"):
+                manager_link = f"https://t.me/{support_manager_id[1:]}"
+            else:
+                manager_link = f"tg://user?id={support_manager_id}"
+
+            keyboard = types.InlineKeyboardMarkup()
+            keyboard.add(
+                types.InlineKeyboardButton(
+                    text="💬 Написать менеджеру", url=manager_link
+                )
+            )
+
+            bot.send_message(
+                message.chat.id,
+                "💬 <b>Связаться с менеджером</b>\n\n"
+                "Нажмите кнопку ниже, чтобы написать менеджеру.\n"
+                "Мы ответим вам в ближайшее время!",
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+
+        except Exception as e:
+            logger.error(f"Error in contact manager handler: {e}")
+            bot.send_message(
+                message.chat.id,
+                "❌ Ошибка получения контакта менеджера. "
+                "Попробуйте позже или свяжитесь через /help",
+            )
 
 
 def _send_welcome(bot: telebot.TeleBot, chat_id: int) -> None:

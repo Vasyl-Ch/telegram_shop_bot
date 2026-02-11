@@ -18,8 +18,6 @@ from application.services.order_service import OrderService
 from application.services.payment_service import PaymentService
 from infrastructure.repositories.cart_repository import CartRepository
 from infrastructure.repositories.order_repository import OrderRepository
-from infrastructure.payments.stripe_provider import StripeProvider
-from infrastructure.payments.cash_provider import CashProvider
 from infrastructure.payments.payment_provider import PaymentProviderError
 from domain.enums.payment_method import PaymentMethod
 from presentation.keyboards.inline_keyboards import (
@@ -50,7 +48,6 @@ def register_checkout_handlers(
     payment_service: PaymentService,
     cart_repo: CartRepository,
     order_repo: OrderRepository,
-    stripe_provider: StripeProvider,
     seller_chat_id: str,
 ) -> None:
     """
@@ -241,7 +238,7 @@ def register_checkout_handlers(
 
             if payment_dto.payment_method == PaymentMethod.STRIPE:
                 _handle_stripe_payment(
-                    bot, order, order_repo, stripe_provider, seller_chat_id
+                    bot, order, order_repo, payment_service, seller_chat_id
                 )
             elif payment_dto.payment_method == PaymentMethod.CASH:
                 _handle_cash_payment(bot, order, order_repo, seller_chat_id)
@@ -383,12 +380,19 @@ def _handle_stripe_payment(
     bot: telebot.TeleBot,
     order,
     order_repo: OrderRepository,
-    stripe_provider: StripeProvider,
+    payment_service: PaymentService,
     seller_chat_id: str,
 ) -> None:
     """Handles the creation of a Stripe Checkout Session."""
     try:
-        payment_data = asyncio.run(stripe_provider.create_payment(order))
+        payment_url = payment_service.initiate_payment(order)
+        if not payment_url:
+            raise PaymentProviderError("Failed to create payment URL")
+
+        payment_data = {
+            "payment_url": payment_url,
+            "payment_id": order.stripe_session_id,
+        }
         order.set_stripe_session(payment_data["payment_id"])
 
         order = order_repo.update(order)
