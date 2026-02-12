@@ -13,6 +13,7 @@ from presentation.keyboards.inline_keyboards import (
     get_categories_keyboard,
     get_products_keyboard,
     get_product_detail_keyboard,
+    get_brands_keyboard,
 )
 from utils.formatters import format_product_card
 
@@ -37,9 +38,7 @@ def register_catalog_handlers(
     # Category
     # ──────────────────────────────────────────────
 
-    @bot.message_handler(
-        func=lambda m: m.text in ("🗂 Категории",)
-    )
+    @bot.message_handler(func=lambda m: m.text in ("🗂 Категории",))
     @bot.message_handler(commands=["categories"])
     def handle_categories(message: types.Message) -> None:
         categories = catalog_repo.get_categories()
@@ -54,9 +53,7 @@ def register_catalog_handlers(
             reply_markup=get_categories_keyboard(categories),
         )
 
-    @bot.callback_query_handler(
-        func=lambda c: c.data and c.data.startswith("cat:")
-    )
+    @bot.callback_query_handler(func=lambda c: c.data and c.data.startswith("cat:"))
     def handle_category_selected(call: types.CallbackQuery) -> None:
         category = call.data.split(":", 1)[1]
         products = catalog_repo.get_by_category(category)
@@ -101,6 +98,64 @@ def register_catalog_handlers(
                 parse_mode="HTML",
                 reply_markup=get_categories_keyboard(categories),
             )
+        bot.answer_callback_query(call.id)
+
+    # ──────────────────────────────────────────────
+    # Brand filtering
+    # ──────────────────────────────────────────────
+
+    @bot.callback_query_handler(func=lambda c: c.data == "filter:brands")
+    def handle_brands_filter(call: types.CallbackQuery) -> None:
+        """Show list of brands for filtering."""
+        brands = catalog_repo.get_brands()
+        if not brands:
+            bot.answer_callback_query(call.id, "Нет товаров с указанными брендами.")
+            return
+
+        try:
+            bot.edit_message_text(
+                text="🏷️ <b>Выберите бренд:</b>",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=get_brands_keyboard(brands),
+            )
+        except Exception:
+            bot.send_message(
+                call.message.chat.id,
+                "🏷️ <b>Выберите бренд:</b>",
+                parse_mode="HTML",
+                reply_markup=get_brands_keyboard(brands),
+            )
+
+        bot.answer_callback_query(call.id)
+
+    @bot.callback_query_handler(func=lambda c: c.data and c.data.startswith("brand:"))
+    def handle_brand_selected(call: types.CallbackQuery) -> None:
+        """Show products of selected brand."""
+        brand = call.data.split(":", 1)[1]
+        products = catalog_repo.get_by_brand(brand)
+
+        if not products:
+            bot.answer_callback_query(call.id, "Нет товаров этого бренда.")
+            return
+
+        try:
+            bot.edit_message_text(
+                text=f"🏷️ <b>Бренд: {brand}</b>",
+                chat_id=call.message.chat.id,
+                message_id=call.message.message_id,
+                parse_mode="HTML",
+                reply_markup=get_products_keyboard(products, f"brand_{brand}"),
+            )
+        except Exception:
+            bot.send_message(
+                call.message.chat.id,
+                f"🏷️ <b>Бренд: {brand}</b>",
+                parse_mode="HTML",
+                reply_markup=get_products_keyboard(products, f"brand_{brand}"),
+            )
+
         bot.answer_callback_query(call.id)
 
     @bot.callback_query_handler(func=lambda c: c.data == "back:catalog")
@@ -149,9 +204,7 @@ def register_catalog_handlers(
     # Detailed product card
     # ──────────────────────────────────────────────
 
-    @bot.callback_query_handler(
-        func=lambda c: c.data and c.data.startswith("prod:")
-    )
+    @bot.callback_query_handler(func=lambda c: c.data and c.data.startswith("prod:"))
     def handle_product_detail(call: types.CallbackQuery) -> None:
         product_id = int(call.data.split(":")[1])
         product = catalog_repo.get_by_id(product_id)
@@ -193,9 +246,7 @@ def register_catalog_handlers(
     # Add to cart
     # ──────────────────────────────────────────────
 
-    @bot.callback_query_handler(
-        func=lambda c: c.data and c.data.startswith("add:")
-    )
+    @bot.callback_query_handler(func=lambda c: c.data and c.data.startswith("add:"))
     def handle_add_to_cart(call: types.CallbackQuery) -> None:
         product_id = int(call.data.split(":")[1])
         chat_id = call.message.chat.id
@@ -210,16 +261,11 @@ def register_catalog_handlers(
             return
 
         cart = cart_repo.get_or_create(chat_id)
-        current_qty = (
-            cart.items[product_id].quantity
-            if product_id in cart.items
-            else 0
-        )
+        current_qty = cart.items[product_id].quantity if product_id in cart.items else 0
 
         if current_qty >= product.stock:
             bot.answer_callback_query(
-                call.id,
-                f"Нельзя добавить больше {product.stock} шт."
+                call.id, f"Нельзя добавить больше {product.stock} шт."
             )
             return
 
@@ -227,17 +273,18 @@ def register_catalog_handlers(
             cart_item = CartItem(
                 product_id=product.product_id,
                 name=product.name,
-                price=product.price,
+                price=product.package_price,
                 quantity=1,
                 max_available=product.stock,
+                unit_of_measurement=product.unit_of_measurement,
+                size_or_weight=product.size_or_weight,
             )
             cart.add_item(cart_item)
             cart_repo.update(cart)
 
             new_qty = cart.items[product_id].quantity
             bot.answer_callback_query(
-                call.id,
-                f"✅ {product.name} добавлен! В корзине: {new_qty} шт."
+                call.id, f"✅ {product.name} добавлен! В корзине: {new_qty} шт."
             )
         except ValueError as e:
             bot.answer_callback_query(call.id, str(e))
@@ -248,30 +295,26 @@ def register_catalog_handlers(
 
     @bot.message_handler(func=lambda m: m.text == "🔍 Поиск")
     def handle_search_start(message: types.Message) -> None:
-        bot.send_message(
-            message.chat.id,
-            "🔍 Введите название товара для поиска:"
-        )
+        bot.send_message(message.chat.id, "🔍 Введите название товара для поиска:")
         bot.register_next_step_handler(message, _process_search)
 
     def _process_search(message: types.Message) -> None:
         query = message.text.strip()
         if len(query) < 2:
             bot.send_message(
-                message.chat.id,
-                "Запрос слишком короткий. Введите хотя бы 2 символа."
+                message.chat.id, "Запрос слишком короткий. Введите хотя бы 2 символа."
             )
             return
 
         results = catalog_repo.search(query)
         if not results:
             bot.send_message(
-                message.chat.id,
-                f"По запросу «{query}» ничего не найдено."
+                message.chat.id, f"По запросу «{query}» ничего не найдено."
             )
             return
 
         from presentation.keyboards.inline_keyboards import get_products_keyboard
+
         bot.send_message(
             message.chat.id,
             f"🔍 Результаты поиска «{query}»:",

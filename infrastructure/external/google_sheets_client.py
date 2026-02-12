@@ -66,7 +66,7 @@ class GoogleSheetsClient:
             raise
 
     def _load(self):
-        """Загружает данные из Google Таблицы."""
+        """Loads data from Google Sheets with normalization."""
         try:
             data = self.sheet.get_all_records()
 
@@ -92,6 +92,9 @@ class GoogleSheetsClient:
                     "price": 0,
                     "stock": 0,
                     "image_url": "",
+                    "brand": "",
+                    "size_or_weight": 0,
+                    "unit_of_measurement": "шт",
                 }
             )
 
@@ -104,13 +107,56 @@ class GoogleSheetsClient:
                 pd.to_numeric(df["stock"], errors="coerce").fillna(0).astype(int)
             )
 
+            if "size_or_weight" in df.columns:
+                df["size_or_weight"] = pd.to_numeric(
+                    df["size_or_weight"], errors="coerce"
+                ).fillna(0)
+            else:
+                df["size_or_weight"] = 0
+
+            if "unit_of_measurement" in df.columns:
+                df["unit_of_measurement"] = (
+                    df["unit_of_measurement"].astype(str).str.strip().str.lower()
+                )
+                df["unit_of_measurement"] = df["unit_of_measurement"].replace(
+                    {
+                        "кг": "кг",
+                        "kg": "кг",
+                        "килограмм": "кг",
+                        "шт": "шт",
+                        "sht": "шт",
+                        "штука": "шт",
+                        "": "шт",
+                    }
+                )
+                df.loc[
+                    ~df["unit_of_measurement"].isin(["кг", "шт"]), "unit_of_measurement"
+                ] = "шт"
+            else:
+                df["unit_of_measurement"] = "шт"
+
             df = df.drop_duplicates(subset=["id"], keep="first")
             df = df[df["id"] > 0]
 
             self.data = df.set_index("id").to_dict("index")
             self.last_modified = datetime.now().timestamp()
 
+            for i, (prod_id, prod_data) in enumerate(list(self.data.items())[:5]):
+                logger.info(
+                    f"Loaded product {prod_id}: name={prod_data.get('name')}, "
+                    f"unit={prod_data.get('unit_of_measurement')}, "
+                    f"size={prod_data.get('size_or_weight')}, "
+                    f"price={prod_data.get('price')}"
+                )
+
             logger.info(f"✅ Loaded {len(self.data)} products from Google Sheets")
+
+            for i, (prod_id, prod_data) in enumerate(list(self.data.items())[:3]):
+                logger.debug(
+                    f"Product {prod_id}: unit={prod_data.get('unit_of_measurement')}, "
+                    f"size={prod_data.get('size_or_weight')}, "
+                    f"price={prod_data.get('price')}"
+                )
 
         except Exception as e:
             logger.error(f"❌ Error loading catalog: {e}")
@@ -123,7 +169,16 @@ class GoogleSheetsClient:
             df = pd.DataFrame.from_dict(self.data, orient="index")
             df = df.reset_index().rename(columns={"index": "id"})
 
-            columns_order = ["id", "name", "category", "price", "stock"]
+            columns_order = [
+                "id",
+                "brand",
+                "name",
+                "category",
+                "size_or_weight",
+                "price",
+                "unit_of_measurement",
+                "stock",
+            ]
             if "image_url" in df.columns:
                 columns_order.append("image_url")
 
@@ -227,4 +282,37 @@ class GoogleSheetsClient:
             item_id: item_data
             for item_id, item_data in self.data.items()
             if 0 < item_data.get("stock", 0) <= threshold
+        }
+
+    def get_brands(self) -> list:
+        """
+        Returns a list of unique brands.
+
+        Returns:
+            list: Sorted list of brand names (excluding empty)
+        """
+        if not self.data:
+            return []
+
+        brands = {
+            item.get("brand", "").strip()
+            for item in self.data.values()
+            if item.get("brand", "").strip()
+        }
+        return sorted(brands)
+
+    def get_by_brand(self, brand: str) -> dict:
+        """
+        Returns items of the specified brand.
+
+        Args:
+            brand: Brand name
+
+        Returns:
+            dict: Products filtered by brand
+        """
+        return {
+            item_id: item_data
+            for item_id, item_data in self.data.items()
+            if item_data.get("brand", "").strip().lower() == brand.strip().lower()
         }

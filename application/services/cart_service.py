@@ -74,9 +74,11 @@ class CartService:
         cart_item = CartItem(
             product_id=product.product_id,
             name=product.name,
-            price=product.price,
+            price=product.package_price,
             quantity=1,
             max_available=product.stock,
+            unit_of_measurement=product.unit_of_measurement,
+            size_or_weight=product.size_or_weight,
         )
         cart.add_item(cart_item)
         self._cart_repo.update(cart)

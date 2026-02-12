@@ -229,3 +229,34 @@ class CatalogRepository:
             logger.info(
                 f"⚠️ Low stock notification sent for {product.name} ({product.stock} left)"
             )
+
+    def get_brands(self) -> List[str]:
+        """
+        Gets a list of all brands.
+
+        Returns:
+            List[str]: List of unique brands
+        """
+        return self._client.get_brands()
+
+    def get_by_brand(self, brand: str) -> List[Product]:
+        """
+        Receives goods of a certain brand.
+
+        Args:
+            brand: Brand name
+
+        Returns:
+            List[Product]: List of products with this brand
+        """
+        items = self._client.get_by_brand(brand)
+        products = []
+
+        for product_id, data in items.items():
+            try:
+                product = Product.from_dict({**data, "id": product_id})
+                products.append(product)
+            except Exception as e:
+                logger.error(f"Error creating Product {product_id}: {e}")
+
+        return products

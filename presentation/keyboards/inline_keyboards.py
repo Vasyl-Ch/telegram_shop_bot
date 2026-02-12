@@ -12,7 +12,7 @@ from domain.enums.payment_method import PaymentMethod
 
 def get_categories_keyboard(categories: List[str]) -> types.InlineKeyboardMarkup:
     """
-    List of categories.
+    List of categories with brands button.
 
     Args:
         categories: List of category names
@@ -21,12 +21,44 @@ def get_categories_keyboard(categories: List[str]) -> types.InlineKeyboardMarkup
         InlineKeyboardMarkup
     """
     markup = types.InlineKeyboardMarkup(row_width=1)
+
+    markup.add(
+        types.InlineKeyboardButton(
+            text="🏷️ Фильтр по бренду", callback_data="filter:brands"
+        )
+    )
+
     for category in categories:
         markup.add(
             types.InlineKeyboardButton(
                 text=f"📂 {category}", callback_data=f"cat:{category}"
             )
         )
+    return markup
+
+
+def get_brands_keyboard(brands: List[str]) -> types.InlineKeyboardMarkup:
+    """
+    List of brands for filtering.
+
+    Args:
+        brands: List of brand names
+
+    Returns:
+        InlineKeyboardMarkup
+    """
+    markup = types.InlineKeyboardMarkup(row_width=1)
+    for brand in brands:
+        markup.add(
+            types.InlineKeyboardButton(
+                text=f"🏷️ {brand}", callback_data=f"brand:{brand}"
+            )
+        )
+    markup.add(
+        types.InlineKeyboardButton(
+            text="⬅️ Назад к категориям", callback_data="back:categories"
+        )
+    )
     return markup
 
 

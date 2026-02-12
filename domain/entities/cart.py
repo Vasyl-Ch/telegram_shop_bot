@@ -18,6 +18,7 @@ class CartItem:
     The product is in the cart.
 
     Value Object - identified by product_id.
+    Stores package_price for correct calculation when product has weight.
     """
 
     product_id: int
@@ -25,6 +26,9 @@ class CartItem:
     price: Decimal
     quantity: int
     max_available: int
+
+    unit_of_measurement: str = "шт"
+    size_or_weight: Optional[float] = None
 
     def __post_init__(self):
         """Validation."""
@@ -40,6 +44,18 @@ class CartItem:
     def total(self) -> Decimal:
         """Position value."""
         return self.price * self.quantity
+
+    @property
+    def display_info(self) -> str:
+        """
+        Returns display information about the item.
+
+        Returns:
+            str: e.g., "×2 шт" or "×3 (по 2.5кг)"
+        """
+        if self.unit_of_measurement == "кг" and self.size_or_weight:
+            return f"×{self.quantity} (по {self.size_or_weight}кг)"
+        return f"×{self.quantity} шт"
 
     def can_increase(self) -> bool:
         """Is it possible to increase the number."""
@@ -64,6 +80,8 @@ class CartItem:
             price=self.price,
             quantity=self.quantity + 1,
             max_available=self.max_available,
+            unit_of_measurement=self.unit_of_measurement,
+            size_or_weight=self.size_or_weight,
         )
 
     def decrease(self) -> Optional["CartItem"]:
@@ -83,6 +101,8 @@ class CartItem:
             price=self.price,
             quantity=self.quantity - 1,
             max_available=self.max_available,
+            unit_of_measurement=self.unit_of_measurement,
+            size_or_weight=self.size_or_weight,
         )
 
 

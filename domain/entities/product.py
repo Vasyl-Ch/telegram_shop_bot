@@ -33,6 +33,9 @@ class Product:
     price: Decimal
     stock: int
     image_url: Optional[str] = None
+    brand: Optional[str] = None
+    unit_of_measurement: str = "шт"
+    size_or_weight: Optional[float] = None
 
     def __post_init__(self):
         """
@@ -53,6 +56,13 @@ class Product:
         if self.stock < 0:
             raise ValueError(f"Stock cannot be negative: {self.stock}")
 
+        object.__setattr__(
+            self, "unit_of_measurement", self.unit_of_measurement.lower().strip()
+        )
+
+        if self.unit_of_measurement not in ("шт", "кг"):
+            raise ValueError(f"Invalid unit_of_measurement: {self.unit_of_measurement}")
+
     @property
     def is_available(self) -> bool:
         """
@@ -64,14 +74,82 @@ class Product:
         return self.stock > 0
 
     @property
+    def final_price_per_unit(self) -> Decimal:
+        """
+        Calculates final price per unit (kg or piece) based on measurement type.
+
+        Logic:
+        - If unit is "кг": return base price (already per kg)
+        - If unit is "шт":
+            - If size_or_weight < 30: it's volume, return base price (per piece)
+            - If size_or_weight >= 30: it's weight in grams, calculate price per kg
+
+        Returns:
+            Decimal: Final price per unit
+        """
+        if self.unit_of_measurement == "кг":
+            return self.price
+
+        if self.size_or_weight is None:
+            return self.price
+
+        if self.size_or_weight < 30:
+            return self.price
+        else:
+            weight_kg = Decimal(str(self.size_or_weight)) / Decimal("1000")
+            if weight_kg > 0:
+                return self.price / weight_kg
+            return self.price
+
+    @property
+    def package_price(self) -> Decimal:
+        """
+        Calculates price for one package/unit of this product.
+
+        Logic:
+        - If unit is "кг" AND size_or_weight is set:
+            price_per_kg × size_or_weight (kg) = price for this package
+        - Otherwise: return base price (price per piece)
+
+        Returns:
+            Decimal: Price for one package
+        """
+        if self.unit_of_measurement == "кг" and self.size_or_weight:
+            result = self.price * Decimal(str(self.size_or_weight))
+
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.debug(
+                f"Product {self.product_id} ({self.name}): "
+                f"price_per_kg={self.price}, weight={self.size_or_weight}кг, "
+                f"package_price={result}"
+            )
+            return result
+
+        return self.price
+
+    @property
     def display_price(self) -> str:
         """
         Formatted price to display.
 
-        Returns:
-            str: Price with currency
+        For "кг" products shows: "100₴/кг (250₴ за 2.5кг)"
+        For "шт" products shows: "50₴/шт" or "200₴/кг (50₴ за 250г)"
         """
-        return f"{self.price:.2f}"
+        if self.unit_of_measurement == "кг":
+            if self.size_or_weight and self.size_or_weight > 0:
+                package_price = self.package_price
+                return f"{self.price:.2f}₴/кг ({package_price:.2f}₴ за {self.measurement_info})"
+            return f"{self.price:.2f}₴/кг"
+
+        if self.size_or_weight is not None and self.size_or_weight >= 30:
+            price_per_kg = self.final_price_per_unit
+            return (
+                f"{price_per_kg:.2f}₴/кг ({self.price:.2f}₴ за {self.measurement_info})"
+            )
+
+        return f"{self.price:.2f}₴/шт"
 
     @property
     def stock_status(self) -> str:
@@ -83,10 +161,31 @@ class Product:
         """
         if self.stock == 0:
             return "❌ Нет в наличии"
-        elif self.stock <= 5:
+        elif self.stock <= 5 and self.unit_of_measurement == "кг":
+            return f"⚠️ Осталось {self.stock} кг."
+        elif self.stock <= 5 and self.unit_of_measurement == "шт":
             return f"⚠️ Осталось {self.stock} шт."
         else:
             return f"✅ В наличии ({self.stock} шт.)"
+
+    @property
+    def measurement_info(self) -> str:
+        """
+        Returns measurement information for display.
+
+        Returns:
+            str: Measurement details (e.g., "2.5кг", "0.5л", "250г")
+        """
+        if self.size_or_weight is None:
+            return f"1 {self.unit_of_measurement}"
+
+        if self.unit_of_measurement == "кг":
+            return f"{self.size_or_weight}кг"
+
+        if self.size_or_weight < 30:
+            return f"{self.size_or_weight}л"
+        else:
+            return f"{int(self.size_or_weight)}грамм"
 
     def can_fulfill_quantity(self, quantity: int) -> bool:
         """
@@ -104,13 +203,18 @@ class Product:
         """
         Calculates the cost for the specified quantity.
 
+        Logic:
+        - If unit is "кг" AND size_or_weight is set:
+            Uses package_price (price_per_kg × kg_per_package) × quantity
+        - Otherwise: base_price × quantity
+
         Args:
-            quantity: Quantity of goods
+            quantity: Number of packages/pieces
 
         Returns:
-            Decimal: Total Cost
+            Decimal: Total cost
         """
-        return self.price * quantity
+        return self.package_price * quantity
 
     @classmethod
     def from_dict(cls, data: dict) -> "Product":
@@ -130,6 +234,11 @@ class Product:
             price=Decimal(str(data["price"])),
             stock=int(data["stock"]),
             image_url=data.get("image_url"),
+            brand=data.get("brand"),
+            unit_of_measurement=str(data.get("unit_of_measurement", "шт")),
+            size_or_weight=(
+                float(data["size_or_weight"]) if data.get("size_or_weight") else None
+            ),
         )
 
     def to_dict(self) -> dict:
@@ -146,4 +255,7 @@ class Product:
             "price": float(self.price),
             "stock": self.stock,
             "image_url": self.image_url or "",
+            "brand": self.brand or "",
+            "unit_of_measurement": self.unit_of_measurement,
+            "size_or_weight": self.size_or_weight,
         }

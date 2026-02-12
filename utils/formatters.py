@@ -27,7 +27,7 @@ def format_price(amount: Decimal) -> str:
 
 def format_product_card(product: Product) -> str:
     """
-    Generates a product card.
+    Generates a product card with brand, measurement info, and pricing.
 
     Args:
         product: Commodity
@@ -35,12 +35,27 @@ def format_product_card(product: Product) -> str:
     Returns:
         str: Text of the product card for Telegram
     """
-    return (
-        f"🏷 <b>{product.name}</b>\n"
-        f"💰 Цена: <b>{format_price(product.price)}</b>\n"
-        f"📦 {product.stock_status}\n"
-        f"🗂 Категория: {product.category}"
+    lines = [f"🏷 <b>{product.name}</b>"]
+
+    if product.brand:
+        lines.append(f"🏢 Бренд: <b>{product.brand}</b>")
+
+    lines.extend(
+        [
+            f"📦 Фасовка: {product.measurement_info}",
+            f"💰 Цена: <b>{product.display_price}</b>",
+        ]
     )
+
+    if product.unit_of_measurement == "кг" and product.size_or_weight:
+        lines.append(f"💵 За упаковку: <b>{format_price(product.package_price)}</b>")
+
+    if product.unit_of_measurement == "кг" and product.size_or_weight:
+        lines.append(f"📍 За упаковку: <b>{format_price(product.package_price)}</b>")
+
+    lines.extend([f"📊 {product.stock_status}", f"🗂 Категория: {product.category}"])
+
+    return "\n".join(lines)
 
 
 def format_cart(cart: Cart) -> str:
@@ -59,12 +74,20 @@ def format_cart(cart: Cart) -> str:
     lines = ["🛍 <b>Ваша корзина:</b>\n"]
 
     for item in cart.get_items_list():
+        if item.unit_of_measurement == "кг" and item.size_or_weight:
+            price_info = f"{format_price(item.price)} за {item.size_or_weight}кг"
+        else:
+            price_info = f"{format_price(item.price)}/шт"
+
         lines.append(
-            f"• {item.name} " f"×{item.quantity} — " f"{format_price(item.total)}"
+            f"• {item.name}\n"
+            f"  {item.display_info} × {price_info} = {format_price(item.total)}"
         )
 
     lines.append(f"\n💰 <b>Итого: {format_price(cart.get_total())}</b>")
-    lines.append(f"📦 Товаров: {cart.get_items_count()} шт.")
+
+    total_items = cart.get_items_count()
+    lines.append(f"📦 Позиций: {total_items}")
 
     return "\n".join(lines)
 
