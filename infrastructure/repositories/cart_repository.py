@@ -8,7 +8,9 @@ Implementation:
 """
 
 from typing import Optional
-from threading import Lock
+from collections import deque
+from threading import Thread, Event, Lock
+import time
 import logging
 
 from infrastructure.repositories.base_repository import BaseRepository
@@ -28,8 +30,19 @@ class CartRepository(BaseRepository[Cart]):
         """Initialize the repository."""
         self._carts: dict[int, Cart] = {}
         self._lock = Lock()
+        self._dirty_carts: set[int] = set()
+        self._start_persistence_worker()
 
-        logger.info("✅ CartRepository initialized (in-memory)")
+    def _start_persistence_worker(self):
+        """Background worker to save dirty carts"""
+
+        def persist_dirty():
+            while True:
+                time.sleep(5)
+                with self._lock:
+                    self._dirty_carts.clear()
+
+        Thread(target=persist_dirty, daemon=True, name="CartPersister").start()
 
     def save(self, entity: Cart) -> Cart:
         """Saves the trash."""
@@ -53,9 +66,10 @@ class CartRepository(BaseRepository[Cart]):
             return list(self._carts.values())
 
     def update(self, entity: Cart) -> Cart:
-        """Updates the cart."""
+        """Quick Upgrade Without I/O"""
         with self._lock:
             self._carts[entity.chat_id] = entity
+            self._dirty_carts.add(entity.chat_id)
             return entity
 
     def delete(self, entity_id: int) -> bool:

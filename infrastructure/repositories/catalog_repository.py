@@ -12,6 +12,8 @@ Adapter Pattern Application:
 
 from typing import List, Optional
 import logging
+from functools import lru_cache
+from datetime import datetime, timedelta
 
 from domain.entities.product import Product
 from infrastructure.external.google_sheets_client import GoogleSheetsClient
@@ -30,13 +32,19 @@ class CatalogRepository:
     """
 
     def __init__(self, google_sheets_client: GoogleSheetsClient):
+        self._client = google_sheets_client
+        self._cache_timestamp = datetime.now()
+        self._cache_ttl = timedelta(minutes=5)
         """
         Args:
             google_sheets_client: Client for working with Google Sheets
         """
-        self._client = google_sheets_client
         logger.info("✅ CatalogRepository initialized")
 
+    def _is_cache_valid(self) -> bool:
+        return datetime.now() - self._cache_timestamp < self._cache_ttl
+
+    @lru_cache(maxsize=512)
     def get_by_id(self, product_id: int) -> Optional[Product]:
         """
         Receives the goods by ID.
@@ -47,6 +55,9 @@ class CatalogRepository:
         Returns:
             Optional[Product]: Item if found
         """
+        if not self._is_cache_valid():
+            self.get_by_id.cache_clear()
+
         data = self._client.data.get(product_id)
         if not data:
             return None

@@ -223,6 +223,11 @@ def get_stripe_payment_keyboard(
     )
     markup.add(
         types.InlineKeyboardButton(
+            text="💵 Изменить на наличные", callback_data=f"change_to_cash:{order_id}"
+        )
+    )
+    markup.add(
+        types.InlineKeyboardButton(
             text="❌ Отменить заказ", callback_data=f"cancel_order:{order_id}"
         )
     )
@@ -237,7 +242,7 @@ def get_seller_order_keyboard(
 
     Args:
         order: Order
-        stage: Order stage ("new", "confirmed")
+        stage: Order stage ("new", "paid", "confirmed")
 
     Returns:
         InlineKeyboardMarkup
@@ -246,6 +251,15 @@ def get_seller_order_keyboard(
     oid = order.order_id
 
     if stage == "new":
+        markup.row(
+            types.InlineKeyboardButton(
+                text="✅ Подтвердить", callback_data=f"seller_confirm:{oid}"
+            ),
+            types.InlineKeyboardButton(
+                text="❌ Отменить", callback_data=f"seller_cancel:{oid}"
+            ),
+        )
+    elif stage == "paid":
         markup.row(
             types.InlineKeyboardButton(
                 text="✅ Подтвердить", callback_data=f"seller_confirm:{oid}"

@@ -131,6 +131,61 @@ class NotificationService:
         except Exception as e:
             logger.error(f"notify_seller_payment_received error: {e}")
 
+    def update_seller_order_status(
+        self,
+        order: Order,
+        customer_name: str,
+        stage: str = "paid",
+    ) -> None:
+        """
+        Updates the seller's existing order message.
+
+        Args:
+        order: Order with updated status
+        customer_name: Buyer's Name
+        stage: Order stage for keyboard:
+            - "new": new order (cash)
+            - "paid": paid online, pending confirmation ✅
+            - "confirmed": confirmed, awaiting delivery
+        """
+        if not self._seller_chat_id or not order.seller_message_id:
+            logger.warning(
+                f"Cannot update seller message: "
+                f"seller_chat_id={self._seller_chat_id}, "
+                f"seller_message_id={order.seller_message_id}"
+            )
+            return
+
+        try:
+            from utils.formatters import format_order_for_seller
+            from presentation.keyboards.inline_keyboards import (
+                get_seller_order_keyboard,
+            )
+
+            if stage == "paid":
+                header = f"💳 <b>ОПЛАТА ПОЛУЧЕНА! Заказ #{order.order_id}</b>\n\n"
+            else:
+                header = f"🔔 <b>ЗАКАЗ #{order.order_id}</b>\n\n"
+
+            text = header + format_order_for_seller(order, customer_name)
+            keyboard = get_seller_order_keyboard(order, stage=stage)
+
+            self._bot.edit_message_text(
+                text=text,
+                chat_id=self._seller_chat_id,
+                message_id=order.seller_message_id,
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+
+            logger.info(
+                f"✅ Updated seller message for order #{order.order_id} "
+                f"(stage: {stage})"
+            )
+
+        except Exception as e:
+            logger.error(f"update_seller_order_status error: {e}", exc_info=True)
+
     def notify_low_stock(self, product_name: str, remaining: int) -> None:
         """
         Notifies the seller that the stock is low.

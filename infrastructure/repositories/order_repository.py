@@ -19,16 +19,19 @@ from pathlib import Path
 from typing import List, Optional
 from threading import Lock
 import logging
+from threading import Thread, Event
+import time
 
 from infrastructure.repositories.base_repository import BaseRepository
 from domain.entities.order import Order, OrderItem
 from domain.enums.order_status import OrderStatus
 from domain.enums.payment_method import PaymentMethod
+from infrastructure.repositories.json_persistence_mixin import JsonPersistenceMixin
 
 logger = logging.getLogger(__name__)
 
 
-class OrderRepository(BaseRepository[Order]):
+class OrderRepository(BaseRepository[Order], JsonPersistenceMixin[Order]):
     """
     In-memory repository of orders.
 
@@ -38,69 +41,46 @@ class OrderRepository(BaseRepository[Order]):
     def __init__(self, persistence_file: str = "data/orders.json"):
         self._orders: dict[int, Order] = {}
         self._lock = Lock()
+        self._data = self._orders
         self._next_id = 1
         self._persistence_file = Path(persistence_file)
 
         self._load_from_disk()
+        self._dirty = False
+        self._batch_save_event = Event()
+        self._start_batch_saver()
+
+        if self._orders:
+            max_id = max(self._orders.keys())
+            self._next_id = max_id + 1
 
         logger.info(
             f"✅ OrderRepository initialized "
             f"({len(self._orders)} orders loaded from {persistence_file})"
         )
 
-    def _load_from_disk(self) -> None:
-        """Loads orders from a JSON file."""
-        if not self._persistence_file.exists():
-            logger.info("📁 No persistence file found, starting fresh")
-            return
+    def _start_batch_saver(self):
+        """Background thread for batching recordings"""
 
-        try:
-            with open(self._persistence_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
+        def batch_saver():
+            while True:
+                self._batch_save_event.wait(timeout=2.0)
+                if self._dirty:
+                    with self._lock:
+                        self._save_to_disk()
+                        self._dirty = False
+                self._batch_save_event.clear()
 
-            for order_data in data.get("orders", []):
-                order = self._deserialize_order(order_data)
-                self._orders[order.order_id] = order
+        thread = Thread(target=batch_saver, daemon=True, name="OrderBatchSaver")
+        thread.start()
 
-                if order.order_id >= self._next_id:
-                    self._next_id = order.order_id + 1
+    def _get_collection_key(self) -> str:
+        return "orders"
 
-            logger.info(f"✅ Loaded {len(self._orders)} orders from disk")
+    def _serialize_entity(self, entity: Order) -> dict:
+        return entity.to_dict()
 
-        except Exception as e:
-            logger.error(f"❌ Error loading orders: {e}", exc_info=True)
-
-    def _save_to_disk(self) -> None:
-        """Saves orders to a JSON file."""
-        try:
-            self._persistence_file.parent.mkdir(parents=True, exist_ok=True)
-
-            data = {
-                "orders": [order.to_dict() for order in self._orders.values()],
-                "last_updated": datetime.now().isoformat(),
-            }
-
-            temp_file = self._persistence_file.with_suffix(".tmp")
-            with open(temp_file, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=2)
-
-            try:
-                temp_file.replace(self._persistence_file)
-            except PermissionError:
-                logger.warning("⚠️ Permission denied for atomic replace, using direct write")
-                with open(self._persistence_file, "w", encoding="utf-8") as f:
-                    json.dump(data, f, ensure_ascii=False, indent=2)
-                try:
-                    temp_file.unlink()
-                except:
-                    pass
-
-            logger.debug(f"💾 Saved {len(self._orders)} orders to disk")
-
-        except Exception as e:
-            logger.error(f"❌ Error saving orders: {e}", exc_info=True)
-
-    def _deserialize_order(self, data: dict) -> Order:
+    def _deserialize_entity(self, data: dict) -> Order:
         """Restores Order from the dictionary."""
         items = [
             OrderItem(
@@ -136,6 +116,9 @@ class OrderRepository(BaseRepository[Order]):
 
         return order
 
+    def _get_entity_id(self, entity: Order) -> int:
+        return entity.order_id
+
     def _generate_id(self) -> int:
         """
         Generates a unique ID for a new order.
@@ -151,21 +134,45 @@ class OrderRepository(BaseRepository[Order]):
         """Saves the order to memory AND to disk."""
         with self._lock:
             if entity.order_id == 0:
-                from copy import copy
-
+                # ✅ ИСПРАВЛЕНИЕ: Создаем новый заказ с правильным ID
                 new_id = self._generate_id()
-                saved_order = copy(entity)
-                saved_order.order_id = new_id
+
+                # Создаем новый объект Order с правильным ID
+                saved_order = Order(
+                    order_id=new_id,  # ✅ Присваиваем новый ID
+                    chat_id=entity.chat_id,
+                    items=entity.items,
+                    phone=entity.phone,
+                    address=entity.address,
+                    status=entity.status,
+                    payment_method=entity.payment_method,
+                    stripe_session_id=entity.stripe_session_id,
+                    stripe_payment_intent_id=entity.stripe_payment_intent_id,
+                    created_at=entity.created_at,
+                    updated_at=entity.updated_at,
+                    notes=entity.notes,
+                )
+
+                # Копируем дополнительные атрибуты
+                saved_order.seller_message_id = entity.seller_message_id
+                saved_order.customer_message_id = entity.customer_message_id
+
+                # Сохраняем в словарь
                 self._orders[new_id] = saved_order
 
-                self._save_to_disk()
+                # Помечаем как dirty для батчинга
+                self._dirty = True
+                self._batch_save_event.set()
 
                 logger.info(f"💾 Order #{new_id} saved")
-                return saved_order
+                return saved_order  # ✅ Возвращаем объект с правильным ID
+
             else:
+                # Обновление существующего заказа
                 self._orders[entity.order_id] = entity
 
-                self._save_to_disk()
+                self._dirty = True
+                self._batch_save_event.set()
 
                 logger.info(f"💾 Order #{entity.order_id} updated")
                 return entity
@@ -188,7 +195,8 @@ class OrderRepository(BaseRepository[Order]):
 
             self._orders[entity.order_id] = entity
 
-            self._save_to_disk()
+            self._dirty = True
+            self._batch_save_event.set()
 
             logger.info(f"🔄 Order #{entity.order_id} updated")
             return entity

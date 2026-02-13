@@ -110,9 +110,12 @@ class GoogleSheetsClient:
             if "size_or_weight" in df.columns:
                 df["size_or_weight"] = pd.to_numeric(
                     df["size_or_weight"], errors="coerce"
-                ).fillna(0)
+                )
+                df["size_or_weight"] = df["size_or_weight"].where(
+                    pd.notna(df["size_or_weight"]), None
+                )
             else:
-                df["size_or_weight"] = 0
+                df["size_or_weight"] = None
 
             if "unit_of_measurement" in df.columns:
                 df["unit_of_measurement"] = (
@@ -129,6 +132,12 @@ class GoogleSheetsClient:
                         "": "шт",
                     }
                 )
+                kg_mask = df["unit_of_measurement"] == "кг"
+                df.loc[
+                    kg_mask
+                    & ((df["size_or_weight"].isna()) | (df["size_or_weight"] == 0)),
+                    "size_or_weight",
+                ] = None
                 df.loc[
                     ~df["unit_of_measurement"].isin(["кг", "шт"]), "unit_of_measurement"
                 ] = "шт"

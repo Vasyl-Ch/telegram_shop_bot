@@ -117,32 +117,26 @@ class PaymentService:
             )
 
         try:
-            is_paid = asyncio.run(
-                self._stripe.verify_payment(order.stripe_session_id)
-            )
+            is_paid = asyncio.run(self._stripe.verify_payment(order.stripe_session_id))
 
             if is_paid:
                 details = asyncio.run(
-                    self._stripe.get_payment_details(
-                        order.stripe_session_id
-                    )
+                    self._stripe.get_payment_details(order.stripe_session_id)
                 )
                 updated_order = self._order_service.mark_as_paid(
                     order.order_id,
-                    {
-                        "payment_intent_id": details.get(
-                            "payment_intent_id"
-                        )
-                    },
+                    {"payment_intent_id": details.get("payment_intent_id")},
                 )
 
+                from utils.helpers import get_customer_name
+
                 customer_name = get_customer_name(
-                    self._notification._bot,
-                    updated_order.chat_id
+                    self._notification._bot, updated_order.chat_id
                 )
-                self._notification.notify_seller_payment_received(
+                self._notification.update_seller_order_status(
                     updated_order,
-                    customer_name
+                    customer_name,
+                    stage="paid",
                 )
 
                 return PaymentResultDTO(
@@ -153,9 +147,7 @@ class PaymentService:
                         f"✅ Оплата подтверждена!\n\n"
                         f"Заказ #{order.order_id} принят в обработку."
                     ),
-                    updated_order_dto=OrderResponseDTO.from_order(
-                        updated_order
-                    ),
+                    updated_order_dto=OrderResponseDTO.from_order(updated_order),
                     payment_intent_id=details.get("payment_intent_id"),
                 )
 
@@ -164,16 +156,12 @@ class PaymentService:
                 is_paid=False,
                 new_status=order.status,
                 message_for_user=(
-                    "⏳ Оплата ещё не поступила.\n"
-                    "Попробуйте проверить через минуту."
+                    "⏳ Оплата ещё не поступила.\n" "Попробуйте проверить через минуту."
                 ),
             )
 
         except Exception as e:
-            logger.error(
-                f"Payment check error for order "
-                f"#{order.order_id}: {e}"
-            )
+            logger.error(f"Payment check error for order " f"#{order.order_id}: {e}")
             return PaymentResultDTO(
                 order_id=order.order_id,
                 is_paid=False,
@@ -192,23 +180,21 @@ class PaymentService:
         try:
             updated = self._order_service.mark_as_paid(
                 order.order_id,
-                {"payment_intent_id": session_details.get("payment_intent_id")}
+                {"payment_intent_id": session_details.get("payment_intent_id")},
             )
 
             self._notification.notify_order_status_changed(updated)
 
-            customer_name = get_customer_name(
-                self._notification._bot,
-                updated.chat_id
-            )
-            self._notification.notify_seller_payment_received(
+            from utils.helpers import get_customer_name
+
+            customer_name = get_customer_name(self._notification._bot, updated.chat_id)
+            self._notification.update_seller_order_status(
                 updated,
-                customer_name
+                customer_name,
+                stage="paid",
             )
 
-            logger.info(
-                f"✅ Payment success handled for order #{order.order_id}"
-            )
+            logger.info(f"✅ Payment success handled for order #{order.order_id}")
         except Exception as e:
             logger.error(f"handle_payment_success error: {e}")
 

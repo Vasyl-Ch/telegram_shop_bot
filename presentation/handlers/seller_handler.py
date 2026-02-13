@@ -41,6 +41,7 @@ def register_seller_handlers(
         order_repo: Order Repository
         seller_chat_id: Merchant Chat ID
         catalog_repo: Directory Repository
+        user_limit_repo:
     """
 
     def is_seller(chat_id: int) -> bool:
@@ -127,7 +128,7 @@ def register_seller_handlers(
 
     @bot.message_handler(func=lambda m: m.text == "🗂 Заказы")
     def handle_orders_menu(message: types.Message) -> None:
-        """Показывает меню управления заказами."""
+        """Shows the order management menu."""
         if not is_seller(message.chat.id):
             return
 
@@ -232,11 +233,7 @@ def register_seller_handlers(
         from domain.enums.payment_method import PaymentMethod
 
         all_orders = order_repo.get_all()
-        stripe_orders = [
-            o
-            for o in all_orders
-            if o.payment_method == PaymentMethod.STRIPE and o.is_paid()
-        ]
+        stripe_orders = [o for o in all_orders if o.is_stripe_paid()]
 
         if not stripe_orders:
             bot.send_message(message.chat.id, "Нет онлайн-оплат.")
@@ -279,7 +276,7 @@ def register_seller_handlers(
         )
 
     # ──────────────────────────────────────────────
-    # Управление пользователями
+    # User management
     # ──────────────────────────────────────────────
 
     @bot.message_handler(func=lambda m: m.text == "👥 Управление пользователями")

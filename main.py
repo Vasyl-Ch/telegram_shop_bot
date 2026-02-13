@@ -130,6 +130,7 @@ def register_all_handlers(bot: telebot.TeleBot, container: Container) -> None:
         payment_service=container.payment_service(),
         cart_repo=container.cart_repository(),
         order_repo=container.order_repository(),
+        notification_service=container.notification_service(),
         seller_chat_id=settings.seller_chat_id,
     )
 

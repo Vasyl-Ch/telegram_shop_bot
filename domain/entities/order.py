@@ -206,6 +206,19 @@ class Order:
         """
         return self.status.is_paid
 
+    def is_stripe_paid(self) -> bool:
+        """
+        Checks that the Stripe order has been paid.
+
+        Returns:
+            bool: True if Stripe order is successfully paid
+        """
+        return self.payment_method == PaymentMethod.STRIPE and self.status in [
+            OrderStatus.PAID,
+            OrderStatus.CONFIRMED,
+            OrderStatus.DELIVERED,
+        ]
+
     def is_final(self) -> bool:
         """
         Checks if the order is in the final status.

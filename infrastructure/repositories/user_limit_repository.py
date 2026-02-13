@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional, List
 from threading import Lock
 from datetime import datetime
+import os
 
 from domain.entities.user_limit import UserLimit
 
@@ -64,10 +65,26 @@ class UserLimitRepository:
             }
 
             temp_file = self._persistence_file.with_suffix(".tmp")
+
             with open(temp_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
 
-            temp_file.replace(self._persistence_file)
+            try:
+                if self._persistence_file.exists():
+                    self._persistence_file.unlink()
+
+                temp_file.rename(self._persistence_file)
+
+            except PermissionError:
+                logger.warning("⚠️ Could not use atomic write, using direct write")
+                with open(self._persistence_file, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False, indent=2)
+
+                if temp_file.exists():
+                    try:
+                        temp_file.unlink()
+                    except:
+                        pass
 
             logger.debug(f"💾 Saved {len(self._limits)} user limits to disk")
 
@@ -75,7 +92,7 @@ class UserLimitRepository:
             logger.error(f"❌ Error saving user limits: {e}", exc_info=True)
 
     def _deserialize_limit(self, data: dict) -> UserLimit:
-        """Retributes UserLimit from the dictionary."""
+        """Restores UserLimit from the dictionary."""
         return UserLimit(
             chat_id=data["chat_id"],
             is_banned=data.get("is_banned", False),

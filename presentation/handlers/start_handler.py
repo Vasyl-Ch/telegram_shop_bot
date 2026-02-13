@@ -11,17 +11,44 @@ from presentation.keyboards.main_keyboards import get_main_menu_keyboard
 logger = logging.getLogger(__name__)
 
 
-def register_start_handlers(bot: telebot.TeleBot) -> None:
+def register_start_handlers(bot: telebot.TeleBot, user_limit_repo=None) -> None:
     """
     Registers handlers for the /start command.
 
     Args:
         bot: Telegram bot instance
+        user_limit_repo: User Limit Repository (optional)
     """
 
     @bot.message_handler(commands=["start"])
     def handle_start(message: types.Message) -> None:
         """The /start command handler."""
+
+        if user_limit_repo:
+            limit = user_limit_repo.get(message.chat.id)
+            if limit and limit.is_banned:
+                ban_message = (
+                    "🚫 <b>Доступ к боту заблокирован</b>\n\n"
+                    f"<b>Причина:</b> {limit.ban_reason or 'не указана'}\n\n"
+                )
+
+                if limit.banned_at:
+                    ban_date = limit.banned_at.strftime("%d.%m.%Y %H:%M")
+                    ban_message += f"<b>Дата блокировки:</b> {ban_date}\n\n"
+
+                ban_message += (
+                    "Для разблокировки свяжитесь с администратором.\n"
+                    "Используйте кнопку '💬 Связаться с менеджером' ниже."
+                )
+
+                bot.send_message(
+                    message.chat.id,
+                    ban_message,
+                    parse_mode="HTML",
+                    reply_markup=get_main_menu_keyboard(),
+                )
+                return
+
         param = None
         if message.text and " " in message.text:
             param = message.text.split(" ", 1)[1]

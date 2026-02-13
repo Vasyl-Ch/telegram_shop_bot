@@ -6,6 +6,7 @@ Single Responsibility: Formatting only.
 """
 
 from decimal import Decimal
+import math
 
 from domain.entities.order import Order
 from domain.entities.cart import Cart
@@ -50,9 +51,6 @@ def format_product_card(product: Product) -> str:
     if product.unit_of_measurement == "кг" and product.size_or_weight:
         lines.append(f"💵 За упаковку: <b>{format_price(product.package_price)}</b>")
 
-    if product.unit_of_measurement == "кг" and product.size_or_weight:
-        lines.append(f"📍 За упаковку: <b>{format_price(product.package_price)}</b>")
-
     lines.extend([f"📊 {product.stock_status}", f"🗂 Категория: {product.category}"])
 
     return "\n".join(lines)
@@ -74,8 +72,13 @@ def format_cart(cart: Cart) -> str:
     lines = ["🛍 <b>Ваша корзина:</b>\n"]
 
     for item in cart.get_items_list():
-        if item.unit_of_measurement == "кг" and item.size_or_weight:
-            price_info = f"{format_price(item.price)} за {item.size_or_weight}кг"
+        if (item.unit_of_measurement == "кг" and 
+            item.size_or_weight is not None and 
+            not math.isnan(item.size_or_weight) and 
+            item.size_or_weight > 0):
+            total_weight = item.size_or_weight * item.quantity
+            price_info = (f"{format_price(item.price)} \n"
+                          f"За {total_weight}{item.unit_of_measurement}")
         else:
             price_info = f"{format_price(item.price)}/шт"
 
