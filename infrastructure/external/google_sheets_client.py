@@ -6,6 +6,7 @@ Adapter Pattern Application:
 - Minimal changes to existing code
 - Isolates dependency on the Google Sheets API
 """
+import re
 
 import pandas as pd
 import logging
@@ -65,6 +66,18 @@ class GoogleSheetsClient:
             logger.error(f"❌ Google Sheets authentication error: {e}")
             raise
 
+    def _fix_google_drive_link(self, url):
+        if not url or not isinstance(url, str):
+            return url
+
+        if "drive.google.com" in url:
+            match = re.search(r"(?:/d/|id=)([a-zA-Z0-9_-]+)", url)
+            if match:
+                file_id = match.group(1)
+                return f"https://drive.google.com/uc?export=view&id={file_id}"
+
+        return url
+
     def _load(self):
         """Loads data from Google Sheets with normalization."""
         try:
@@ -76,6 +89,8 @@ class GoogleSheetsClient:
                 return
 
             df = pd.DataFrame(data)
+            if "image_url" in df.columns:
+                df["image_url"] = df["image_url"].apply(self._fix_google_drive_link)
 
             required_columns = ["id", "name", "category", "price", "stock"]
             missing_columns = [col for col in required_columns if col not in df.columns]
