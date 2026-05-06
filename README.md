@@ -154,6 +154,98 @@ id | brand  | name           | category  | size_or_weight | price | unit_of_meas
 
 ---
 
+## 🚀 Installation and Running
+
+### Requirements
+- Python 3.8 or higher
+- pip (Python package manager)
+- Git (for cloning the repository)
+
+### Local Run
+
+**1. Clone the repository:**
+```bash
+git clone https://github.com/Vasyl-Ch/telegram_shop_bot.git
+cd telegram_shop_bot
+```
+
+**2. Create a virtual environment (recommended):**
+```bash
+# Windows
+python -m venv venv
+venv\Scripts\activate
+
+# Linux/MacOS
+python3 -m venv venv
+source venv/bin/activate
+```
+
+**3. Install dependencies:**
+```bash
+pip install -r requirements.txt
+```
+
+**4. Configure environment variables:**
+- Copy `.env.example` to `.env`
+- Fill in all required variables (see "Setup and Obtaining Credentials" section)
+- Place the `credentials.json` file in the project root
+
+**5. Run the bot:**
+```bash
+python main.py
+```
+
+You should see the message:
+```
+✅ Bot started successfully
+✅ GoogleSheetsClient initialized
+```
+
+### Running with Docker
+
+**1. Make sure you have Docker and docker-compose installed:**
+```bash
+docker --version
+docker-compose --version
+```
+
+**2. Configure environment variables:**
+- Create `.env` file (see above)
+- Make sure `credentials.json` is in the project root
+- In `.env` change `JSON_KEY_FILE` to `/app/credentials.json`
+
+**3. Build and run the container:**
+```bash
+docker-compose up -d
+```
+
+**4. Check logs:**
+```bash
+docker-compose logs -f telegram-bot
+```
+
+**5. Stop the bot:**
+```bash
+docker-compose down
+```
+
+**Useful Docker commands:**
+```bash
+# Rebuild container after changes
+docker-compose build --no-cache
+
+# Restart container
+docker-compose restart
+
+# View status
+docker-compose ps
+
+# Remove container and data
+docker-compose down -v
+```
+
+---
+
 **Want a bot like this for your business? 🚀**
 
 📩 Message me on [Telegram](https://t.me/Vasilba1025) — I'll help you set it up and launch!
@@ -326,6 +418,98 @@ id | brand  | name           | category  | size_or_weight | price | unit_of_meas
    ```
 2. Заполните все значения в `.env` файле полученными учетными данными
 3. **ВАЖНО**: Файл `.env` и `credentials.json` находятся в `.gitignore` и не должны попадать в репозиторий!
+
+---
+
+## 🚀 Установка и запуск
+
+### Требования
+- Python 3.8 или выше
+- pip (менеджер пакетов Python)
+- Git (для клонирования репозитория)
+
+### Локальный запуск
+
+**1. Клонируйте репозиторий:**
+```bash
+git clone https://github.com/Vasyl-Ch/telegram_shop_bot.git
+cd telegram_shop_bot
+```
+
+**2. Создайте виртуальное окружение (рекомендуется):**
+```bash
+# Windows
+python -m venv venv
+venv\Scripts\activate
+
+# Linux/MacOS
+python3 -m venv venv
+source venv/bin/activate
+```
+
+**3. Установите зависимости:**
+```bash
+pip install -r requirements.txt
+```
+
+**4. Настройте переменные окружения:**
+- Скопируйте `.env.example` в `.env`
+- Заполните все необходимые переменные (см. раздел "Настройка и получение учетных данных")
+- Поместите файл `credentials.json` в корень проекта
+
+**5. Запустите бота:**
+```bash
+python main.py
+```
+
+Вы должны увидеть сообщение:
+```
+✅ Bot started successfully
+✅ GoogleSheetsClient initialized
+```
+
+### Запуск в Docker
+
+**1. Убедитесь, что у вас установлен Docker и docker-compose:**
+```bash
+docker --version
+docker-compose --version
+```
+
+**2. Настройте переменные окружения:**
+- Создайте файл `.env` (см. выше)
+- Убедитесь, что файл `credentials.json` находится в корне проекта
+- В `.env` измените `JSON_KEY_FILE` на `/app/credentials.json`
+
+**3. Соберите и запустите контейнер:**
+```bash
+docker-compose up -d
+```
+
+**4. Проверьте логи:**
+```bash
+docker-compose logs -f telegram-bot
+```
+
+**5. Остановить бота:**
+```bash
+docker-compose down
+```
+
+**Полезные команды Docker:**
+```bash
+# Пересборка контейнера после изменений
+docker-compose build --no-cache
+
+# Перезапуск контейнера
+docker-compose restart
+
+# Просмотр статуса
+docker-compose ps
+
+# Удаление контейнера и данных
+docker-compose down -v
+```
 
 ---
 
