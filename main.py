@@ -22,6 +22,7 @@ from config import containers
 from config.settings import settings
 from config.containers import Container
 from presentation.middleware.ban_check_middleware import BanCheckMiddleware
+from utils.healthcheck import HealthCheckServer
 from utils.logger import setup_logging
 
 from presentation.handlers.start_handler import register_start_handlers
@@ -321,6 +322,13 @@ def main() -> None:
     ensure_data_directory()
 
     # ════════════════════════════════════════════════════════════
+    # 2.5. Start Healthcheck Server (NEW!)
+    # ════════════════════════════════════════════════════════════
+
+    healthcheck = HealthCheckServer(host="0.0.0.0", port=8080)
+    healthcheck.start()
+
+    # ════════════════════════════════════════════════════════════
     # 3. Creating a DI Container
     # ════════════════════════════════════════════════════════════
 
@@ -379,6 +387,8 @@ def main() -> None:
 
         poller = container.payment_poller()
         poller.stop()
+
+        healthcheck.stop()
 
         logger.info("👋 Goodbye!")
 

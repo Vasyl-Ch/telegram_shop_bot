@@ -40,20 +40,132 @@ No more fiddling with Excel files — update your inventory right from the brows
 ✨ **Automatic backups** — Google saves your data for you 
 ✨ **Multi-account** — multiple sellers can operate simultaneously
 
-# 💰 How much does it cost? 
-**The best part — it’s free!** 
+# 💰 How much does it cost?
+**The best part — it's free!** 🎁
 
- 🎁 You only pay for a server (if you want), but you can run it on your own PC!
+You only pay for a server (if you want), but you can run it on your own PC!
+
+---
+
+## 🔐 Setup and Obtaining Credentials
+
+### 1. Telegram Bot Token
+- Open [@BotFather](https://t.me/BotFather) in Telegram
+- Send the `/newbot` command and follow the instructions
+- Copy the received token to the `BOT_TOKEN` variable
+- Copy the bot username to the `BOT_USERNAME` variable
+
+### 2. Chat ID (SELLER_CHAT_ID and SUPPORT_MANAGER_ID)
+- Open [@userinfobot](https://t.me/userinfobot) in Telegram
+- The bot will automatically send you your Chat ID
+- Copy the ID to the `SELLER_CHAT_ID` and `SUPPORT_MANAGER_ID` variables
+
+### 3. Google Sheets API
+**Step 1: Creating a project in Google Cloud Console**
+- Go to [Google Cloud Console](https://console.cloud.google.com/)
+- Create a new project or select an existing one
+- In the menu, go to "APIs & Services" → "Library"
+- Find and enable "Google Sheets API" and "Google Drive API"
+
+**Step 2: Creating a Service Account**
+- Go to "APIs & Services" → "Credentials"
+- Click "Create Credentials" → "Service Account"
+- Fill in the name and description, click "Create and Continue"
+- Skip granting roles (optional)
+- Click "Done"
+
+**Step 3: Getting the JSON key**
+- In the Service Accounts list, find the created account
+- Click on the account email
+- Go to the "Keys" tab
+- Click "Add Key" → "Create new key"
+- Select "JSON" type and click "Create"
+- The file will automatically download — save it as `credentials.json` in the project root
+
+**Step 4: Setting up Google Sheets**
+- Create a new Google spreadsheet or open an existing one
+- Copy the spreadsheet ID from the URL (between `/d/` and `/edit`):
+  ```
+  https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit
+  ```
+- Open `credentials.json` and copy the Service Account email (the `client_email` field)
+- In Google Sheets, click "Share" and grant "Editor" access to this email
+- Paste the spreadsheet ID into the `GOOGLE_DISK_ID` variable
+
+### 4. Stripe Payment Keys
+- Sign up at [Stripe](https://stripe.com/)
+- Go to the [Dashboard](https://dashboard.stripe.com/)
+- In the "Developers" → "API keys" section, find:
+  - **Publishable key** → copy to `STRIPE_PUBLISHABLE_KEY`
+  - **Secret key** → copy to `STRIPE_SECRET_KEY`
+- For testing, use test keys (starting with `pk_test_` and `sk_test_`)
+
+### 5. Setting up Google Sheets Table
+
+Your Google spreadsheet should contain the following columns (order matters):
+
+| Column | Type | Required | Description | Example |
+|--------|------|----------|-------------|---------|
+| **id** | number | ✅ Yes | Unique product identifier | 1, 2, 3 |
+| **brand** | text | ❌ No | Product brand/manufacturer | Nike, Apple |
+| **name** | text | ✅ Yes | Product name | iPhone 15, Milk |
+| **category** | text | ✅ Yes | Product category | Electronics, Food |
+| **size_or_weight** | number | ❌ No | Product unit size/weight* | 2.5, 250, 0.5 |
+| **price** | number | ✅ Yes | Product price** | 100, 250.50 |
+| **unit_of_measurement** | text | ✅ Yes | Unit of measurement: "кг" (kg) or "шт" (pcs) | кг, шт |
+| **stock** | number | ✅ Yes | Quantity in stock | 10, 0, 100 |
+| **image_url** | text | ❌ No | Image URL (Google Drive supported) | https://drive.google.com/... |
+
+**Important rules:**
+
+**\* `size_or_weight` column:**
+- For "кг" (kg) products: package weight in kilograms (e.g., 2.5 for a 2.5kg package)
+- For "шт" (pcs) products:
+  - If < 30: volume in liters (e.g., 0.5 for a 0.5L bottle)
+  - If ≥ 30: weight in grams (e.g., 250 for a 250g package)
+
+**\*\* `price` column:**
+- For "кг" (kg) products: price per 1 kilogram
+- For "шт" (pcs) products: price per 1 piece/package
+
+**Filling examples:**
+
+```
+id | brand  | name           | category  | size_or_weight | price | unit_of_measurement | stock
+1  | Farm   | Milk 2.5%      | Food      | 1.0           | 35    | л                   | 50
+2  | Nike   | Sneakers       | Shoes     |               | 2500  | шт                  | 10
+3  |        | Gouda Cheese   | Food      | 0.3           | 450   | кг                  | 5
+4  | Lay's  | Chips          | Snacks    | 150           | 45    | шт                  | 30
+```
+
+**Images from Google Drive:**
+- Upload the image to Google Drive
+- Open the image and click "Share" → "Get link" → "Anyone with the link"
+- Copy the link to the `image_url` column
+- The bot will automatically convert the link to the correct format
+
+### 6. Environment Variables Setup
+1. Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Fill in all values in the `.env` file with the obtained credentials
+3. **IMPORTANT**: The `.env` and `credentials.json` files are in `.gitignore` and should not be committed to the repository!
+
+---
 
 **Want a bot like this for your business? 🚀**
 
-# 📩 Message me on Telegram — I’ll help you set it up and launch!
+📩 Message me on [Telegram](https://t.me/Vasilba1025) — I'll help you set it up and launch!
 
-# ⭐ Star the repository if you like the project!
+⭐ Star the repository if you like the project!
 
-# License This project is licensed under the CC BY-NC 4.0 License — see the LICENSE file for details.
+## License
+This project is licensed under the CC BY-NC 4.0 License — see the [LICENSE](LICENSE) file for details.
 
-P.S. This bot is already generating real profits for stores! Don’t miss your chance to automate your sales! 💸
+---
+
+*P.S. This bot is already generating real profits for stores! Don't miss your chance to automate your sales!* 💸
 
 # 🛒 Telegram Магазин Бот — Твой личный продавец 24/7!
 
@@ -105,8 +217,115 @@ P.S. This bot is already generating real profits for stores! Don’t miss your c
 
 ## 💰 Сколько стоит?
 
-Самое приятное — **бесплатно!** 🎁  
+Самое приятное — **бесплатно!** 🎁
 Ты платишь только за сервер (если хочешь), но можешь запустить и на своем ПК!
+
+---
+
+## 🔐 Настройка и получение учетных данных
+
+### 1. Telegram Bot Token
+- Откройте [@BotFather](https://t.me/BotFather) в Telegram
+- Отправьте команду `/newbot` и следуйте инструкциям
+- Скопируйте полученный токен в переменную `BOT_TOKEN`
+- Скопируйте username бота в переменную `BOT_USERNAME`
+
+### 2. Chat ID (SELLER_CHAT_ID и SUPPORT_MANAGER_ID)
+- Откройте [@userinfobot](https://t.me/userinfobot) в Telegram
+- Бот автоматически отправит ваш Chat ID
+- Скопируйте ID в переменные `SELLER_CHAT_ID` и `SUPPORT_MANAGER_ID`
+
+### 3. Google Sheets API
+**Шаг 1: Создание проекта в Google Cloud Console**
+- Перейдите в [Google Cloud Console](https://console.cloud.google.com/)
+- Создайте новый проект или выберите существующий
+- В меню перейдите в "APIs & Services" → "Library"
+- Найдите и включите "Google Sheets API" и "Google Drive API"
+
+**Шаг 2: Создание Service Account**
+- Перейдите в "APIs & Services" → "Credentials"
+- Нажмите "Create Credentials" → "Service Account"
+- Заполните имя и описание, нажмите "Create and Continue"
+- Пропустите предоставление ролей (опционально)
+- Нажмите "Done"
+
+**Шаг 3: Получение JSON ключа**
+- В списке Service Accounts найдите созданный аккаунт
+- Нажмите на email аккаунта
+- Перейдите на вкладку "Keys"
+- Нажмите "Add Key" → "Create new key"
+- Выберите тип "JSON" и нажмите "Create"
+- Файл автоматически скачается — сохраните его как `credentials.json` в корень проекта
+
+**Шаг 4: Настройка Google Sheets**
+- Создайте новую Google таблицу или откройте существующую
+- Скопируйте ID таблицы из URL (между `/d/` и `/edit`):
+  ```
+  https://docs.google.com/spreadsheets/d/ВАШ_ID_ТАБЛИЦЫ/edit
+  ```
+- Откройте `credentials.json` и скопируйте email Service Account (поле `client_email`)
+- В Google таблице нажмите "Share" и предоставьте доступ "Editor" этому email
+- Вставьте ID таблицы в переменную `GOOGLE_DISK_ID`
+
+### 4. Stripe Payment Keys
+- Зарегистрируйтесь на [Stripe](https://stripe.com/)
+- Перейдите в [Dashboard](https://dashboard.stripe.com/)
+- В разделе "Developers" → "API keys" найдите:
+  - **Publishable key** → скопируйте в `STRIPE_PUBLISHABLE_KEY`
+  - **Secret key** → скопируйте в `STRIPE_SECRET_KEY`
+- Для тестирования используйте тестовые ключи (начинаются с `pk_test_` и `sk_test_`)
+
+### 5. Настройка Google Sheets таблицы
+
+Ваша Google таблица должна содержать следующие колонки (порядок важен):
+
+| Колонка | Тип | Обязательная | Описание | Пример |
+|---------|-----|--------------|----------|--------|
+| **id** | число | ✅ Да | Уникальный идентификатор товара | 1, 2, 3 |
+| **brand** | текст | ❌ Нет | Бренд/производитель товара | Nike, Apple |
+| **name** | текст | ✅ Да | Название товара | iPhone 15, Молоко |
+| **category** | текст | ✅ Да | Категория товара | Электроника, Продукты |
+| **size_or_weight** | число | ❌ Нет | Размер/вес единицы товара* | 2.5, 250, 0.5 |
+| **price** | число | ✅ Да | Цена товара** | 100, 250.50 |
+| **unit_of_measurement** | текст | ✅ Да | Единица измерения: "кг" или "шт" | кг, шт |
+| **stock** | число | ✅ Да | Количество на складе | 10, 0, 100 |
+| **image_url** | текст | ❌ Нет | URL изображения (поддерживается Google Drive) | https://drive.google.com/... |
+
+**Важные правила:**
+
+**\* Колонка `size_or_weight`:**
+- Для товаров в "кг": вес упаковки в килограммах (например, 2.5 для упаковки 2.5кг)
+- Для товаров в "шт":
+  - Если < 30: объем в литрах (например, 0.5 для бутылки 0.5л)
+  - Если ≥ 30: вес в граммах (например, 250 для упаковки 250г)
+
+**\*\* Колонка `price`:**
+- Для товаров в "кг": цена за 1 килограмм
+- Для товаров в "шт": цена за 1 штуку/упаковку
+
+**Примеры заполнения:**
+
+```
+id | brand  | name           | category  | size_or_weight | price | unit_of_measurement | stock
+1  | Фермер | Молоко 2.5%    | Продукты  | 1.0           | 35    | л                   | 50
+2  | Nike   | Кроссовки      | Обувь     |               | 2500  | шт                  | 10
+3  |        | Сыр Гауда      | Продукты  | 0.3           | 450   | кг                  | 5
+4  | Lay's  | Чипсы          | Снеки     | 150           | 45    | шт                  | 30
+```
+
+**Изображения из Google Drive:**
+- Загрузите изображение на Google Drive
+- Откройте изображение и нажмите "Поделиться" → "Получить ссылку" → "Доступ для всех, у кого есть ссылка"
+- Скопируйте ссылку в колонку `image_url`
+- Бот автоматически преобразует ссылку в правильный формат
+
+### 6. Настройка переменных окружения
+1. Скопируйте `.env.example` в `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+2. Заполните все значения в `.env` файле полученными учетными данными
+3. **ВАЖНО**: Файл `.env` и `credentials.json` находятся в `.gitignore` и не должны попадать в репозиторий!
 
 ---
 

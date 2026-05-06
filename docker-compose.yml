@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  telegram-bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: telegram_shop_bot
+    restart: unless-stopped
+
+    # Переменные окружения из .env файла
+    env_file:
+      - .env
+
+    # Volumes для persistence данных и credentials
+    volumes:
+      # Папка с данными заказов и лимитов
+      - ./data:/app/data
+      # Google Service Account credentials
+      - ./credentials.json:/app/credentials.json:ro
+      # Логи (опционально)
+      - ./logs:/app/logs
+
+    # Healthcheck configuration
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    # Настройка логирования
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+    # Ограничение ресурсов (опционально)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
