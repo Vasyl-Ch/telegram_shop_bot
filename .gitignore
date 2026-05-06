@@ -10,6 +10,8 @@ __pycache__/
 # C extensions
 *.so
 
+# Data files
+data/orders.json
 # Distribution / packaging
 .Python
 build/
